@@ -1,0 +1,86 @@
+[output]
+MeshCreateFile = "maillage/maillage_structured"
+OutputDir = "../output"
+
+[chrono]
+chrono_mesh = true
+chrono_Polarization = true
+chrono_Mechanics = true
+chrono_Electrostatics = true
+chrono_Fracture = true
+chrono_run = true
+
+chrono_global = true
+
+[physics]
+enable_polarization = true
+enable_mechanics = true
+enable_electrostatics = true
+enable_fracture = true
+
+[simulation]
+total_time = 2
+dt = 0.01
+save_frequency = 1
+tolerance_ferro = 1e-4
+tolerance_vfield = 1e-4
+
+
+[mesh]
+L_x = 1.0
+L_y = 1.0
+n_x = 100
+n_y = 100
+element_type = "TRIANGLE"
+
+[polarization]
+initial_polarization = "UNIFORM"
+Px_0 = 0.0
+Py_0 = 0.0
+
+[mechanics]
+initial_mechanics = "UNIFORM"
+ux_0 = 0.0
+uy_0 = 0.0
+
+[electrostatics]
+E_0 = 0.0
+
+[fracture]
+fracture_conditions = "IMPERMEABLE"
+
+[[boundary_rules]]
+field = "px"                  # Champ concerné (phi, ux, uy, px, ou py)
+bc_type = "DIRICHLET"         # NEUMANN ou DIRICHLET
+shape = "edge"                # Type de forme (edge, point, circle, rect)
+edge_name = "left"            # Utilisé si shape = "edge"
+profile = "constant"          # Profil temporel/spatial
+val = 1.0                     # Valeur pour "constant"
+
+[[boundary_rules]]
+field = "uy"                  # Champ concerné (phi, ux, uy, px, ou py)
+bc_type = "DIRICHLET"         # NEUMANN ou DIRICHLET
+shape = "edge"                # Type de forme (edge, point, circle, rect)
+edge_name = "top"             # Utilisé si shape = "edge"
+profile = "constant"          # Profil temporel/spatial
+val = 1.0                     # Valeur pour "constant"
+
+[[boundary_rules]]
+field = "uy"                  # Champ concerné (phi, ux, uy, px, ou py)
+bc_type = "DIRICHLET"         # NEUMANN ou DIRICHLET
+shape = "edge"                # Type de forme (edge, point, circle, rect)
+edge_name = "bottom"             # Utilisé si shape = "edge"
+profile = "constant"          # Profil temporel/spatial
+val = 0.0                     # Valeur pour "constant"
+
+[[boundary_rules]]
+field = "ux"                  # Champ concerné (phi, ux, uy, px, ou py)
+bc_type = "DIRICHLET"         # NEUMANN ou DIRICHLET
+shape = "point"               # Type de forme (edge, point, circle, rect)
+px = 0.0
+py = 0.0
+edge_name = "bottom"          # Utilisé si shape = "edge"
+profile = "constant"          # Profil temporel/spatial
+val = 0.0                     # Valeur pour "constant"
+
+

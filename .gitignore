@@ -1,0 +1,13 @@
+# Fichiers de compilation
+/build/
+/build-*/
+
+# Résultats de simulation
+/data/vtk/
+/data/logs/
+
+# IDE et fichiers système
+.vscode/
+.idea/
+.DS_Store
+*.exe
