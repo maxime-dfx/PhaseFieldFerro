@@ -12,5 +12,5 @@ class Material {
         double alpha_1, alpha_11, alpha_111, alpha_1111,
                         alpha_12, alpha_112, alpha_1112, 
                                             alpha_1122;
-        double eps0, t, P0, mu_p, xi, c0, eta_k;
+        double eps0, t, P0, mu_p, mu_v, xi, c0, eta_k;
 };

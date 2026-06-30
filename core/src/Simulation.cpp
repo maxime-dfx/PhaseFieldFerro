@@ -9,12 +9,13 @@ Simulation::Simulation(const Datafile& config_in, const Mesh& mesh_in, ResultsEx
       material(config_in),
       math(material),
       boundary_manager(mesh_in, config_in),
-      mechanics(config_in, mesh_in, boundary_manager), 
-      electrostatics(config_in, mesh_in),
+      mechanics(config_in, mesh_in, boundary_manager),
+      electrostatics(config_in, mesh_in, boundary_manager),
       fracture(config_in, mesh_in),
-      polarization(config_in, mesh_in, boundary_manager), 
+      polarization(config_in, mesh_in, boundary_manager),
       chrono()
 {
+    boundary_manager.initialize_all_boundaries();
 }
 
 void Simulation::initializeMesh() {
@@ -55,12 +56,21 @@ void Simulation::initializePhysics() {
 
 void Simulation::ComputeOneStepPhysics(double time) {
     boundary_manager.update_time(time);
+    double dt = config.get_dt();
     // 1. Sauvegarde de l'état n (itération m=0)
     // Cela permet aux physiques d'avoir accès à u_{n}, p_{n}, v_{n}
     if (config.enable_polarization()) polarization.save_previous_iteration();
     if (config.enable_mecanics()) mechanics.save_previous_iteration();
     if (config.enable_electrostatics()) electrostatics.save_previous_iteration();
     if (config.enable_fracture()) fracture.save_previous_iteration();
+
+    // Fige P_n / v_n (etat de debut de pas de temps physique), utilises
+    // uniquement dans les termes de masse implicites. Doit etre appele une
+    // seule fois ici, JAMAIS a l'interieur de la boucle do...while ci-dessous
+    // (contrairement a save_previous_iteration(), qui elle est rappelee a
+    // chaque sous-iteration pour le calcul de l'erreur de Picard).
+    if (config.enable_polarization()) polarization.freeze_time_step();
+    if (config.enable_fracture()) fracture.freeze_time_step();
 
     int m = 0;
     double err_p = 1.0;
@@ -86,13 +96,12 @@ void Simulation::ComputeOneStepPhysics(double time) {
 
         // Étape 8: Compute phi^m
         if (config.enable_electrostatics()) {
-            electrostatics.update_Ex(time, polarization, mechanics, fracture);
-            electrostatics.update_Ey(time, polarization, mechanics, fracture);
+            electrostatics.update_electric_potential(dt, polarization, fracture, math);
         }
 
         // Étape 9: Compute v^m
         if (config.enable_fracture()) {
-            fracture.update_v(time, polarization, mechanics, electrostatics);
+            fracture.update_v(dt, polarization, mechanics, electrostatics, math);
         }
 
         // Étape 10: Vérification de la convergence
@@ -108,7 +117,8 @@ void Simulation::ComputeOneStepPhysics(double time) {
             err_v = fracture.calculate_error();     // || v^m - v^{m-1} ||
             fracture.save_previous_iteration();     // v^{m-1} devient v^m
         }
-
+        Logger::debug("[DEBUG][Convergence] t=" + std::to_string(time) + " m=" + std::to_string(m) + 
+                      " err_p=" + std::to_string(err_p) + " err_v=" + std::to_string(err_v), config.debug_enabled());
     } while ((err_p > tol_ferro || err_v > tol_vfield) && m < MAX_ITER);
 
     if (m >= MAX_ITER) {

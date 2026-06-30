@@ -1,10 +1,11 @@
 #pragma once
 #include <iostream>
 #include <string>
+#include "IO/Datafile.h"
 
 class Logger {
 public:
-
+    
     static void announce(const std::string& message) {
         std::cout << "\033[35m[ANNONCE] " << message << "\033[0m\n";
     }
@@ -12,8 +13,10 @@ public:
         std::cout << "[INFO] " << message << "\n";
     }
 
-    static void debug(const std::string& message) {
-        std::cout << "\033[33m[DEBUG] " << message << "\033[0m\n";
+    static void debug(const std::string& message, bool debug_enabled) {
+        if (debug_enabled) {
+            std::cout << "\033[36m[DEBUG] " << message << "\033[0m\n";
+        }
     }
 
     static void success(const std::string& message) {

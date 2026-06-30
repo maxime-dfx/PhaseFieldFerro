@@ -4,7 +4,6 @@
 #include "Core/Mesh.h"
 #include "IO/Datafile.h"
 
-
 class Math;
 class Polarization; 
 class Mechanics;
@@ -14,13 +13,15 @@ class Fracture {
     private:
         Eigen::VectorXd v_current;     
         Eigen::VectorXd v_prev_iter;
+        Eigen::VectorXd v_n;
         const Datafile& config;
         const Mesh& mesh;       
 
     public:
-        // Initialization of fracture based on the configuration and mesh
         Fracture(const Datafile& config, const Mesh& mesh);
-        void update_v(double time, const Polarization& polarization, const Mechanics& mechanics, const Electrostatics& electrostatics);
+        
+        void update_v(double dt, const Polarization& polarization, const Mechanics& mechanics, const Electrostatics& electrostatics, const Math& math);
+        
         const Eigen::VectorXd& get_v() const { return v_current; }
         const Eigen::VectorXd& get_v_prev() const { return v_prev_iter; }
 
@@ -30,5 +31,9 @@ class Fracture {
 
         void save_previous_iteration() {
             v_prev_iter = v_current;
+        }
+
+        void freeze_time_step() {
+            v_n = v_current;
         }
 };

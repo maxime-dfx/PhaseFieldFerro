@@ -3,15 +3,15 @@
 #include "Physics/Electrostatics.h"
 #include "Physics/Polarization.h"
 
-Math::Math(const Material& mat_in) : mat(mat_in) {}
-
-void Math::DimensionLess() {
+Math::Math(const Material& mat_in) : mat(mat_in) {
     xi = mat.xi;
     c0 = mat.c0;
     mu_p = mat.mu_p;
+    mu_v = mat.mu_v;
     a0 = mat.a0;
     P0 = mat.P0;
     t = mat.t;
+    eta_k = mat.eta_k;
     eps0 = mat.eps0;
     alpha1 = mat.alpha_1;
     alpha11 = mat.alpha_11;
@@ -27,6 +27,10 @@ void Math::DimensionLess() {
     c1 = mat.c1;
     c2 = mat.c2;
     c3 = mat.c3;
+}
+
+void Math::DimensionLess() {
+
 
     // xi_adim = xi*sqrt(c0/a0)/P0;
     // pi_adim = Pi/P0;
@@ -61,9 +65,9 @@ double Math::W_energy(const Eigen::Vector2d& Pi, const Eigen::Matrix2d& epsjk) c
 
     return -0.5 * mat.b1 *(epsjk(0,0)*p1_2 + epsjk(1,1)*p2_2)
             -0.5 * mat.b2 *(epsjk(0,0)*p2_2 + epsjk(1,1)*p1_2)
-            - mat.b3 * (epsjk(1,0) + epsjk(0,1))
+            - mat.b3 * (epsjk(1,0) + epsjk(0,1)) * p1 * p2
             + mat.c1 * (epsjk(0,0)*epsjk(0,0) + epsjk(1,1)*epsjk(1,1))
-            + mat.c2 * (epsjk(0,0)*epsjk(1,1));
+            + mat.c2 * (epsjk(0,0)*epsjk(1,1))
             + mat.c3 * (epsjk(0,1)*epsjk(0,1) + epsjk(1,0)*epsjk(1,0));
 }
 

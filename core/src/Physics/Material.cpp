@@ -12,10 +12,11 @@ Material::Material(const Datafile& config) {
     t = config.get_t(); // Température
     P0 = config.get_P0(); // Polarisation de saturation
     mu_p = config.get_mu_p(); // Coefficient de viscosité
+    mu_v = config.get_mu_v(); // Coefficient de viscosité
     xi = config.get_xi(); // Coefficient de couplage électromécanique
     c0 = config.get_c0(); // Coefficient de rigidité
     eta_k = config.get_eta_k(); // Coefficient de pénalisation pour la fracture
-    
+
     // Coefficients d'ordre supérieur pour le modèle de Landau-Devonshire
     alpha_1 = config.get_alpha_1();
     alpha_11 = config.get_alpha_11();

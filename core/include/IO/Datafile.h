@@ -106,7 +106,7 @@ public:
         try {
             m_config = toml::parse_file(filename);
         } catch (const toml::parse_error& err) {
-            Logger::error("Erreur de parsing du fichier TOML : " + std::string(err.description()));
+            // Logger::error("Erreur de parsing du fichier TOML : " + std::string(err.description()));
             throw;
         }
     }
@@ -119,6 +119,13 @@ public:
     }
     std::string getMeshCreateFile() const {
         return get_val<std::string>(m_config, "output", "MeshCreateFile", "mesh");
+    }
+
+    // ============================================================
+    //  DEBUG
+    // ============================================================
+    bool debug_enabled() const {
+        return get_val<bool>(m_config, "debug", "enabled", false);
     }
 
     // ============================================================
@@ -217,7 +224,7 @@ public:
         std::string t = get_val<std::string>(m_config, "polarization", "initial_polarization", "UNIFORM");
         if (t == "UNIFORM") return PolarizationInitializationType::UNIFORM;
         if (t == "RANDOM") return PolarizationInitializationType::RANDOM;
-        Logger::error("Type d'initialisation de polarisation non reconnu.");
+        // Logger::error("Type d'initialisation de polarisation non reconnu.");
         return PolarizationInitializationType::UNIFORM;
     }
     double get_Px_0() const {
@@ -235,7 +242,7 @@ public:
         std::string t = get_val<std::string>(m_config, "mechanics", "initial_mechanics", "UNIFORM");
         if (t == "UNIFORM") return MechanicsInitializationType::UNIFORM;
         if (t == "RANDOM") return MechanicsInitializationType::RANDOM;
-        Logger::error("Type d'initialisation de mechanics non reconnu.");
+        // Logger::error("Type d'initialisation de mechanics non reconnu.");
         return MechanicsInitializationType::UNIFORM;
     }
     double get_ux_0() const {
@@ -252,7 +259,7 @@ public:
         std::string t = get_val<std::string>(m_config, "electrostatics", "initial_electrostatics", "UNIFORM");
         if (t == "UNIFORM") return ElectrostaticsInitializationType::UNIFORM;
         if (t == "RANDOM") return ElectrostaticsInitializationType::RANDOM;
-        Logger::error("Type d'initialisation de electrostatics non reconnu.");
+        // Logger::error("Type d'initialisation de electrostatics non reconnu.");
         return ElectrostaticsInitializationType::UNIFORM;
     }
     double get_Ex_0() const {
@@ -270,7 +277,7 @@ public:
         std::string t = get_val<std::string>(m_config, "fracture", "mode", "PERMEABLE");
         if (t == "PERMEABLE") return CrackBCType::PERMEABLE;
         if (t == "IMPERMEABLE") return CrackBCType::IMPERMEABLE;
-        Logger::error("Type de condition aux limites de fracture non reconnu.");
+        // Logger::error("Type de condition aux limites de fracture non reconnu.");
         return CrackBCType::PERMEABLE;
     }
 
@@ -310,6 +317,9 @@ public:
     double get_mu_p() const {
         return get_val<double>(m_config, "material", "mu_p", 1.0);
     }
+    double get_mu_v() const {
+        return get_val<double>(m_config, "material", "mu_v", 1.0);
+    }
     double get_xi() const {
         return get_val<double>(m_config, "material", "xi", 1.0);
     }
@@ -342,6 +352,12 @@ public:
     }
     double get_eta_k() const {
         return get_val<double>(m_config, "material", "eta_k", 1.0);
+    }
+    double get_Gc() const {
+        return get_val<double>(m_config, "material", "Gc", 1.0);
+    }
+    double get_kappa() const {
+        return get_val<double>(m_config, "material", "kappa", 1.0);
     }
 
     // ============================================================

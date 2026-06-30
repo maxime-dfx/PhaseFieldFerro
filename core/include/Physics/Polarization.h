@@ -1,6 +1,7 @@
 #pragma once
 #include <vector>
 #include <Eigen/Dense>
+#include <Eigen/Sparse>
 #include "Core/Mesh.h"
 #include "IO/Datafile.h"
 #include "Core/BoundaryManager.h"
@@ -16,10 +17,11 @@ class Polarization {
         Eigen::VectorXd Py_current;
         Eigen::VectorXd Px_prev_iter;
         Eigen::VectorXd Py_prev_iter;
+        Eigen::VectorXd Px_n;
+        Eigen::VectorXd Py_n;
         
-        Eigen::MatrixXd A;
         Eigen::VectorXd b;
-        Eigen::MatrixXd local_A;
+        Eigen::SparseMatrix<double> local_A;
         Eigen::VectorXd local_b;
         Eigen::VectorXd Px_local;
         Eigen::VectorXd Py_local;
@@ -34,7 +36,7 @@ class Polarization {
     public:
         // Initialization of fracture based on the configuration and mesh
         Polarization(const Datafile& config, const Mesh& mesh, const BoundaryManager& bc_manager);
-        void apply_boundary_conditions(Eigen::MatrixXd& A, Eigen::VectorXd& b, const std::vector<NodeBC>& bcs);
+        void apply_boundary_conditions(Eigen::SparseMatrix<double>& A, Eigen::VectorXd& b, const std::vector<NodeBC>& bcs);
 
         void update_polarization_component(double time, const Fracture& fracture, const Mechanics& mechanics, const Electrostatics& electrostatics, const Math& math, int component);
         
@@ -55,5 +57,10 @@ class Polarization {
         void save_previous_iteration() {
             Px_prev_iter = Px_current;
             Py_prev_iter = Py_current;
+        }
+
+        void freeze_time_step() {
+            Px_n = Px_current;
+            Py_n = Py_current;
         }
 };

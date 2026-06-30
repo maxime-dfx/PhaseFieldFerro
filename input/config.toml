@@ -2,6 +2,9 @@
 MeshCreateFile = "maillage/maillage_structured"
 OutputDir = "../output"
 
+[debug]
+enabled = false
+
 [chrono]
 chrono_mesh = true
 chrono_Polarization = true
@@ -9,7 +12,6 @@ chrono_Mechanics = true
 chrono_Electrostatics = true
 chrono_Fracture = true
 chrono_run = true
-
 chrono_global = true
 
 [physics]
@@ -19,12 +21,11 @@ enable_electrostatics = true
 enable_fracture = true
 
 [simulation]
-total_time = 2
-dt = 0.01
+total_time = 3.0
+dt = 0.1
 save_frequency = 1
-tolerance_ferro = 1e-4
-tolerance_vfield = 1e-4
-
+tolerance_ferro = 1e-3
+tolerance_vfield = 1e-3
 
 [mesh]
 L_x = 1.0
@@ -35,7 +36,9 @@ element_type = "TRIANGLE"
 
 [polarization]
 initial_polarization = "UNIFORM"
-Px_0 = 0.0
+# pinit = (1, 0) selon le papier (Section 3.1) : polarisation initiale
+# uniforme selon x1 dans TOUT le domaine.
+Px_0 = 1.0
 Py_0 = 0.0
 
 [mechanics]
@@ -47,40 +50,139 @@ uy_0 = 0.0
 E_0 = 0.0
 
 [fracture]
-fracture_conditions = "IMPERMEABLE"
+# Premiere experience du papier (Section 3.2.1) : fissure PERMEABLE,
+# chargement mecanique seul (V=0).
+fracture_conditions = "PERMEABLE"
 
-[[boundary_rules]]
-field = "px"                  # Champ concerné (phi, ux, uy, px, ou py)
-bc_type = "DIRICHLET"         # NEUMANN ou DIRICHLET
-shape = "edge"                # Type de forme (edge, point, circle, rect)
-edge_name = "left"            # Utilisé si shape = "edge"
-profile = "constant"          # Profil temporel/spatial
-val = 1.0                     # Valeur pour "constant"
+# ------------------------------------------------------------
+# [material] — Valeurs normalisees du Tableau 1 (Abdollahi & Arias 2011)
+# ------------------------------------------------------------
+[material]
+alpha_1    = -0.0023
+alpha_11   = -0.0029
+alpha_12   = -0.0011
+alpha_111  = 0.003
+alpha_112  = -0.00068
+alpha_1111 = 0.001
+alpha_1112 = 0.0093
+alpha_1122 = 1.24
 
-[[boundary_rules]]
-field = "uy"                  # Champ concerné (phi, ux, uy, px, ou py)
-bc_type = "DIRICHLET"         # NEUMANN ou DIRICHLET
-shape = "edge"                # Type de forme (edge, point, circle, rect)
-edge_name = "top"             # Utilisé si shape = "edge"
-profile = "constant"          # Profil temporel/spatial
-val = 1.0                     # Valeur pour "constant"
+b1 = 1.4282
+b2 = -0.185
+b3 = 0.8066
+c1 = 185.0
+c2 = 111.0
+c3 = 74.0
 
-[[boundary_rules]]
-field = "uy"                  # Champ concerné (phi, ux, uy, px, ou py)
-bc_type = "DIRICHLET"         # NEUMANN ou DIRICHLET
-shape = "edge"                # Type de forme (edge, point, circle, rect)
-edge_name = "bottom"             # Utilisé si shape = "edge"
-profile = "constant"          # Profil temporel/spatial
-val = 0.0                     # Valeur pour "constant"
+eps0 = 0.131
 
-[[boundary_rules]]
-field = "ux"                  # Champ concerné (phi, ux, uy, px, ou py)
-bc_type = "DIRICHLET"         # NEUMANN ou DIRICHLET
-shape = "point"               # Type de forme (edge, point, circle, rect)
-px = 0.0
-py = 0.0
-edge_name = "bottom"          # Utilisé si shape = "edge"
-profile = "constant"          # Profil temporel/spatial
-val = 0.0                     # Valeur pour "constant"
+# Mobilites (Section 3.1) : 1/mu_p = lp = 1, 1/mu_v = lv = 15.
+# VERIFIE la convention dans Polarization.cpp/Fracture.cpp : si mu_p/mu_v
+# sont deja les MOBILITES dans ton code (pas leur inverse), ces valeurs
+# sont correctes ; sinon inverse-les (mu_p=1.0 -> 1.0, mu_v=15.0 -> 0.0667).
+mu_p = 1.0
+mu_v = 0.0667
 
+a0 = 0.1
+Gc = 4.0
 
+# kappa : le papier prend kappa=2 avec h~1 sur un domaine 200x200 (h/L=0.005).
+# Ton maillage 100x100 sur L=1 donne h=0.01 (h/L=0.01). Pour rester dans le
+# meme regime physique, kappa = 2*h avec ton h reel :
+kappa = 0.02
+
+eta_k = 1.0e-6
+t  = 300.0
+P0 = 1.0
+xi = 1.0
+c0 = 1.0
+
+# ------------------------------------------------------------
+# Conditions aux limites — reproduction de la Fig. 3 du papier
+# (chargement mecanique seul, V=0)
+# ------------------------------------------------------------
+
+# --- Electrique : V=0 (pas de chargement electrique) ---
+[[boundary_rule]]
+field     = "phi"
+shape     = "edge"
+edge_name = "left"
+bc_type   = "DIRICHLET"
+profile   = "constant"
+val       = 0.0
+
+[[boundary_rule]]
+field     = "phi"
+shape     = "edge"
+edge_name = "right"
+bc_type   = "DIRICHLET"
+profile   = "constant"
+val       = 0.0
+
+# --- Mecanique : deplacement vertical monotone croissant u± = (0, ±t) ---
+[[boundary_rule]]
+field      = "uy"
+shape      = "edge"
+edge_name  = "top"
+bc_type    = "DIRICHLET"
+profile    = "time_ramp"
+val_start  = 0.0
+val_end    = 1.0
+t_end      = 3.0
+
+[[boundary_rule]]
+field      = "uy"
+shape      = "edge"
+edge_name  = "bottom"
+bc_type    = "DIRICHLET"
+profile    = "time_ramp"
+val_start  = 0.0
+val_end    = -1.0
+t_end      = 3.0
+
+# --- Amorcage force au centre-gauche (Section 3.1) : u2± = ±t sur la
+# moitie haute et la moitie basse du bord gauche. Place APRES les regles
+# top/bottom ci-dessus pour qu'elles ecrasent les coins (x=0,y=0) et
+# (x=0,y=Ly) avec ces valeurs plus specifiques.
+[[boundary_rule]]
+field      = "uy"
+shape      = "rect"
+xmin       = 0.0
+xmax       = 0.0
+ymin       = 0.5
+ymax       = 1.0
+bc_type    = "DIRICHLET"
+profile    = "time_ramp"
+val_start  = 0.0
+val_end    = 1.0
+t_end      = 3.0
+
+[[boundary_rule]]
+field      = "uy"
+shape      = "rect"
+xmin       = 0.0
+xmax       = 0.0
+ymin       = 0.0
+ymax       = 0.5
+bc_type    = "DIRICHLET"
+profile    = "time_ramp"
+val_start  = 0.0
+val_end    = -1.0
+t_end      = 3.0
+
+# --- Blocage du mode de corps rigide en ux ---
+[[boundary_rule]]
+field     = "ux"
+bc_type   = "DIRICHLET"
+shape     = "point"
+px        = 0.0
+py        = 0.0
+edge_name = "bottom"
+profile   = "constant"
+val       = 0.0
+
+# --- Polarisation : AUCUNE regle px/py -> Neumann naturel (dp/dn=0) sur
+# tous les bords par defaut, conforme a la condition de polarisation
+# libre du papier (Section 3.1), confirme par BoundaryManager::update_time
+# qui initialise tous les noeuds a {NEUMANN, 0.0} avant application des
+# regles.

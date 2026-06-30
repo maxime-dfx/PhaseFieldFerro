@@ -49,7 +49,11 @@ BoundaryManager::BoundaryManager(const Mesh& mesh, const Datafile& config)
 {
     int n_nodes = m_mesh.get_nx() * m_mesh.get_ny();
     m_bc_phi.resize(n_nodes); m_bc_ux.resize(n_nodes); m_bc_uy.resize(n_nodes);
-    m_bc_px.resize(n_nodes); m_bc_py.resize(n_nodes); 
+    m_bc_px.resize(n_nodes); m_bc_py.resize(n_nodes);
+    Logger::debug("[DEBUG][BCManager] phi_bcs.size()=" + std::to_string(get_phi_bcs().size()) + "\n", m_config.debug_enabled());
+    size_t n_d = 0;
+    for (auto& bc : get_phi_bcs()) if (bc.type == BCType::DIRICHLET) n_d++;
+    Logger::debug("[DEBUG][BCManager] phi dirichlet count=" + std::to_string(n_d) + "\n", m_config.debug_enabled());
 }
 
 void BoundaryManager::add_rule_phi(std::shared_ptr<BoundaryShape> shape, BCType type, BCProfile profile) { m_rules_phi.push_back({shape, type, profile}); }
@@ -67,6 +71,7 @@ void BoundaryManager::add_rule_py_constant(std::shared_ptr<BoundaryShape> shape,
 void BoundaryManager::update_time(double t) {
     int nx = m_mesh.get_nx(), ny = m_mesh.get_ny();
     double dx = m_mesh.get_dx(), dy = m_mesh.get_dy();
+    Logger::debug("[BCManager] nx=" + std::to_string(nx) + " ny=" + std::to_string(ny) + " dx=" + std::to_string(dx) + " dy=" + std::to_string(dy) + "\n", m_config.debug_enabled());
 
     NodeBC def = {BCType::NEUMANN, 0.0};
     std::fill(m_bc_phi.begin(), m_bc_phi.end(), def);
