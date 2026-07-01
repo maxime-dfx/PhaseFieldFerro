@@ -1,0 +1,164 @@
+[output]
+MeshCreateFile = "maillage/maillage_structured"
+OutputDir = "/mnt/d/Simulation_Results"
+
+[debug]
+enabled = false
+
+[chrono]
+chrono_mesh = true
+chrono_Polarization = true
+chrono_Mechanics = true
+chrono_Electrostatics = true
+chrono_Fracture = true
+chrono_run = true
+chrono_global = true
+
+[physics]
+enable_polarization = true
+enable_mechanics = true
+enable_electrostatics = true
+enable_fracture = true
+
+[simulation]
+total_time = 4.0
+dt = 0.01
+save_frequency = 1
+tolerance_ferro = 1e-3
+tolerance_vfield = 1e-3
+
+[mesh]
+L_x = 200.0
+L_y = 200.0
+n_x = 200
+n_y = 200
+element_type = "TRIANGLE"
+
+[polarization]
+initial_polarization = "UNIFORM"
+Px_0 = 1.0
+Py_0 = 0.0
+
+[mechanics]
+initial_mechanics = "UNIFORM"
+ux_0 = 0.0
+uy_0 = 0.0
+
+[electrostatics]
+E_0 = 0.0
+
+[fracture]
+fracture_conditions = "IMPERMEABLE"
+
+[material]
+alpha_1    = -0.0023
+alpha_11   = -0.0029
+alpha_12   = -0.0011
+alpha_111  = 0.003
+alpha_112  = -0.00068
+alpha_1111 = 0.001
+alpha_1112 = 0.0093
+alpha_1122 = 1.24
+
+b1 = 1.4282
+b2 = -0.185
+b3 = 0.8066
+c1 = 185.0
+c2 = 111.0
+c3 = 74.0
+
+eps0 = 0.131
+
+mu_p = 1.0
+mu_v = 15.0   
+
+a0 = 0.1
+Gc = 4.0
+kappa = 2.0
+eta_k = 1.0e-6
+
+t  = 300.0
+P0 = 1.0
+xi = 1.0
+c0 = 1.0
+
+# ------------------------------------------------------------
+# CONDITIONS AUX LIMITES (Chargement Électromécanique)
+# ------------------------------------------------------------
+
+# --- Électrique : Potentiel nul à gauche ---
+[[boundary_rule]]
+field     = "phi"
+shape     = "edge"
+edge_name = "left"
+bc_type   = "DIRICHLET"
+profile   = "constant"
+val       = 0.0
+
+# --- Électrique : Potentiel V = -0.6 à droite (Donne E = 3e-3) ---
+[[boundary_rule]]
+field     = "phi"
+shape     = "edge"
+edge_name = "right"
+bc_type   = "DIRICHLET"
+profile   = "constant"
+val       = -0.6
+
+# --- Mécanique : déplacement vertical u± = (0, ±t) ---
+[[boundary_rule]]
+field      = "uy"
+shape      = "edge"
+edge_name  = "top"
+bc_type    = "DIRICHLET"
+profile    = "time_ramp"
+val_start  = 0.0
+val_end    = 4.0
+t_end      = 4.0
+
+[[boundary_rule]]
+field      = "uy"
+shape      = "edge"
+edge_name  = "bottom"
+bc_type    = "DIRICHLET"
+profile    = "time_ramp"
+val_start  = 0.0
+val_end    = -4.0
+t_end      = 4.0
+
+# --- Amorçage de fissure (Moitié haute et basse du bord gauche) ---
+[[boundary_rule]]
+field      = "uy"
+shape      = "rect"
+xmin       = 0.0
+xmax       = 0.0
+ymin       = 100.0
+ymax       = 200.0
+bc_type    = "DIRICHLET"
+profile    = "time_ramp"
+val_start  = 0.0
+val_end    = 3.0
+t_end      = 3.0
+
+[[boundary_rule]]
+field      = "uy"
+shape      = "rect"
+xmin       = 0.0
+xmax       = 0.0
+ymin       = 0.0
+ymax       = 100.0
+bc_type    = "DIRICHLET"
+profile    = "time_ramp"
+val_start  = 0.0
+val_end    = -3.0
+t_end      = 3.0
+
+# --- Blocage du mode de corps rigide (ux = 0 en un point) ---
+[[boundary_rule]]
+field     = "ux"
+bc_type   = "DIRICHLET"
+shape     = "point"
+px        = 0.0
+py        = 0.0
+edge_name = "bottom"
+profile   = "constant"
+val       = 0.0
