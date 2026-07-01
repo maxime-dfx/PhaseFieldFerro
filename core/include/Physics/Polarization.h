@@ -25,19 +25,26 @@ class Polarization {
         Eigen::VectorXd local_b;
         Eigen::VectorXd Px_local;
         Eigen::VectorXd Py_local;
+<<<<<<< HEAD
 
         Eigen::VectorXd Px_backup;
         Eigen::VectorXd Py_backup;
+=======
+        Eigen::VectorXd v_local;
+>>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
 
         double Px_0;
         double Py_0;
         const Datafile& config;
         const Mesh& mesh;
         const BoundaryManager& bc_manager;
+<<<<<<< HEAD
         void assemble_component_system(double dt, const Fracture& fracture, const Mechanics& mechanics, 
                                     const Electrostatics& electrostatics, const Math& math, int component,
                                     std::vector<Eigen::Triplet<double>>& triplets, Eigen::VectorXd& b, Eigen::VectorXd& diag_check);
         void handle_floating_dofs(std::vector<Eigen::Triplet<double>>& triplets, Eigen::VectorXd& b, const Eigen::VectorXd& diag_check, int component);
+=======
+>>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
 
     public:
         // Initialization of fracture based on the configuration and mesh
@@ -69,6 +76,7 @@ class Polarization {
             Px_n = Px_current;
             Py_n = Py_current;
         }
+<<<<<<< HEAD
         void save_previous_state() {
             if (Px_backup.size() != Px_current.size()) {
                 Px_backup.resize(Px_current.size());
@@ -85,4 +93,6 @@ class Polarization {
             Px_n = Px_current;
             Py_n = Py_current;
         }
+=======
+>>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
 };

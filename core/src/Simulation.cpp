@@ -1,7 +1,10 @@
 #include "Simulation.h"
 #include "Utils/Logger.h"
+<<<<<<< HEAD
 #include <algorithm> 
 #include <stdexcept> 
+=======
+>>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
 
 // Constructeur : respect strict de l'ordre de déclaration du fichier .h
 Simulation::Simulation(const Datafile& config_in, const Mesh& mesh_in, ResultsExporter& exporter_in)
@@ -15,11 +18,17 @@ Simulation::Simulation(const Datafile& config_in, const Mesh& mesh_in, ResultsEx
       electrostatics(config_in, mesh_in, boundary_manager),
       fracture(config_in, mesh_in),
       polarization(config_in, mesh_in, boundary_manager),
+<<<<<<< HEAD
       diagnostics(config_in, mesh_in),
       chrono()
 {
     boundary_manager.initialize_all_boundaries();
     energy_csv_path = config.getOutputDir() + "/energies.csv";
+=======
+      chrono()
+{
+    boundary_manager.initialize_all_boundaries();
+>>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
 }
 
 void Simulation::initializeMesh() {
@@ -54,22 +63,31 @@ void Simulation::initializePhysics() {
         {&polarization.get_Px(), &mechanics.get_ux(), &electrostatics.get_Ex()}, 
         {&polarization.get_Py(), &mechanics.get_uy(), &electrostatics.get_Ey()}
     );
+<<<<<<< HEAD
 
     // Enregistrement de l'état initial (t=0) dans le CSV d'énergies, pour
     // avoir un point de départ cohérent avec les graphes du papier (Fig. 6
     // part de zéro à l'état intact).
     diagnostics.record(0.0, 0.0, polarization, mechanics, fracture, electrostatics, math);
     diagnostics.append_csv(energy_csv_path);
+=======
+>>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
     
     Logger::info("Initialization phase complete.");
 }
 
+<<<<<<< HEAD
 // =========================================================================
 // RÉSOLUTION D'UN PAS DE TEMPS (Retourne le nombre d'itérations, ou -1 si échec)
 // =========================================================================
 int Simulation::ComputeOneStepPhysics(double time, double dt) {
     boundary_manager.update_time(time);
     
+=======
+void Simulation::ComputeOneStepPhysics(double time) {
+    boundary_manager.update_time(time);
+    double dt = config.get_dt();
+>>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
     // 1. Sauvegarde de l'état n (itération m=0)
     // Cela permet aux physiques d'avoir accès à u_{n}, p_{n}, v_{n}
     if (config.enable_polarization()) polarization.save_previous_iteration();
@@ -78,15 +96,27 @@ int Simulation::ComputeOneStepPhysics(double time, double dt) {
     if (config.enable_fracture()) fracture.save_previous_iteration();
 
     // Fige P_n / v_n (etat de debut de pas de temps physique), utilises
+<<<<<<< HEAD
     // uniquement dans les termes de masse implicites.
+=======
+    // uniquement dans les termes de masse implicites. Doit etre appele une
+    // seule fois ici, JAMAIS a l'interieur de la boucle do...while ci-dessous
+    // (contrairement a save_previous_iteration(), qui elle est rappelee a
+    // chaque sous-iteration pour le calcul de l'erreur de Picard).
+>>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
     if (config.enable_polarization()) polarization.freeze_time_step();
     if (config.enable_fracture()) fracture.freeze_time_step();
 
     int m = 0;
     double err_p = 1.0;
     double err_v = 1.0;
+<<<<<<< HEAD
     const double tol_ferro = config.get_tol_ferro();  
     const double tol_vfield = config.get_tol_vfield(); 
+=======
+    const double tol_ferro = config.get_tol_ferro();  // À remplacer par config.get_tol_ferro()
+    const double tol_vfield = config.get_tol_vfield(); // À remplacer par config.get_tol_vfield()
+>>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
     const int MAX_ITER = 50;
 
     // 2. Boucle repeat ... until (L'algorithme de ton papier)
@@ -127,6 +157,7 @@ int Simulation::ComputeOneStepPhysics(double time, double dt) {
             err_v = fracture.calculate_error();     // || v^m - v^{m-1} ||
             fracture.save_previous_iteration();     // v^{m-1} devient v^m
         }
+<<<<<<< HEAD
         
         Logger::debug("[DEBUG][Convergence] t=" + std::to_string(time) + " m=" + std::to_string(m) + 
                       " err_p=" + std::to_string(err_p) + " err_v=" + std::to_string(err_v), config.debug_enabled());
@@ -148,10 +179,27 @@ int Simulation::ComputeOneStepPhysics(double time, double dt) {
 // BOUCLE PRINCIPALE AVEC PAS DE TEMPS ADAPTATIF
 // =========================================================================
 void Simulation::run() {
+=======
+        Logger::debug("[DEBUG][Convergence] t=" + std::to_string(time) + " m=" + std::to_string(m) + 
+                      " err_p=" + std::to_string(err_p) + " err_v=" + std::to_string(err_v), config.debug_enabled());
+    } while ((err_p > tol_ferro || err_v > tol_vfield) && m < MAX_ITER);
+
+    if (m >= MAX_ITER) {
+        Logger::warning("Non-convergence au temps " + std::to_string(time) + 
+                        " (err_p=" + std::to_string(err_p) + ", err_v=" + std::to_string(err_v) + ")");
+    }
+}
+
+void Simulation::run() {
+    int total_steps = static_cast<int>(config.get_total_time() / config.get_dt());
+    ProgressBar progressBar(total_steps, "[SIMULATION]");
+    
+>>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
     if (config.get_chrono_run()) { chrono.start(); }
     
     Logger::info("Starting simulation...");
     std::string initial_time = chrono.get_datetime_string();
+<<<<<<< HEAD
     
     double time = 0.0;
     double dt = config.get_dt();
@@ -228,11 +276,29 @@ void Simulation::run() {
                 &diagnostics.get_chi_nodal(), &diagnostics.get_elec_nodal(), 
                 &diagnostics.get_surf_nodal()},
                 // Liste de TOUS les champs vectoriels
+=======
+    double time = 0.0;
+    
+    for (int step = 1; step <= total_steps; ++step) {
+        time += config.get_dt();
+        
+        ComputeOneStepPhysics(time);
+
+        if (step % config.get_save_frequency() == 0) {
+            std::string filename = config.getOutputDir() + "/VTK_" + initial_time + 
+                                   "/multiphysics_results" + std::to_string(step) + ".vtk";
+            
+            exporter.exportMultiPhysicsVTK(
+                filename, 
+                {"v"}, 
+                {&fracture.get_v()},
+>>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
                 {"P", "U", "E"}, 
                 {&polarization.get_Px(), &mechanics.get_ux(), &electrostatics.get_Ex()}, 
                 {&polarization.get_Py(), &mechanics.get_uy(), &electrostatics.get_Ey()}
             );
         }
+<<<<<<< HEAD
         
         int progress = static_cast<int>((time / config.get_total_time()) * 100.0);
         progressBar.update(std::min(progress, 100), 0.0); 
@@ -242,6 +308,12 @@ void Simulation::run() {
 
     // Réécriture complète du CSV en fin de simulation
     diagnostics.write_csv(config.getOutputDir() + "/energies_final.csv");
+=======
+        progressBar.update(step, 0.0); 
+    }
+    
+    progressBar.finish();
+>>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
     
     if (config.get_chrono_run()) { 
         chrono.stop(); 

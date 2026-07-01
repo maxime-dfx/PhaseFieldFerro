@@ -144,6 +144,7 @@ double Math::h_enthalpy_density(double U, double W, double chi, const Eigen::Vec
     return U + W + chi - mat.eps0/2*E.squaredNorm() - E.dot(Pi);
 }
 
+<<<<<<< HEAD
 Eigen::Matrix3d Math::get_elastic_matrix() const {
     Eigen::Matrix3d C;
     C << mat.c1, mat.c2, 0.0,
@@ -187,4 +188,6 @@ double Math::compute_polarization_force(int component, const Eigen::Vector2d& Pi
         return - (penalite_fracture * (dW - E_gp) + dchi);
     }
 }
+=======
+>>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
 

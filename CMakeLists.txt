@@ -29,7 +29,11 @@ set(CORE_SOURCES
     core/src/Core/Mesh.cpp
 
     core/src/IO/Datafile.cpp
+<<<<<<< HEAD
     core/src/IO/Diagnostics.cpp
+=======
+    core/src/IO/MetricsLogger.cpp
+>>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
     core/src/IO/ResultsExporter.cpp
 
     core/src/Utils/ProgressBar.cpp

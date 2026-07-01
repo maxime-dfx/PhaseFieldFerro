@@ -29,8 +29,11 @@ class Electrostatics {
 
         void compute_nodal_electric_field();
         void apply_boundary_conditions(Eigen::SparseMatrix<double>& K, Eigen::VectorXd& F, const std::vector<NodeBC>& bcs);
+<<<<<<< HEAD
         void assemble_electrostatic_system(const Polarization& polarization, const Fracture& fracture, const Math& math,
                                         std::vector<Eigen::Triplet<double>>& triplets, Eigen::VectorXd& F_global);
+=======
+>>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
 
     public:
         Electrostatics(const Datafile& config, const Mesh& mesh, const BoundaryManager& bc_manager);
@@ -51,5 +54,8 @@ class Electrostatics {
 
         double get_Ex_at_gp(const Element& elem, const GaussPoint2D& gp) const;
         double get_Ey_at_gp(const Element& elem, const GaussPoint2D& gp) const;
+<<<<<<< HEAD
 
+=======
+>>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
 };

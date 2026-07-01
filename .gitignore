@@ -1,8 +1,12 @@
 # Fichiers de compilation
 /build/
 /build-*/
+<<<<<<< HEAD
 /Result/
 /Result-*/
+=======
+
+>>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
 # Résultats de simulation
 /data/vtk/
 /data/logs/
