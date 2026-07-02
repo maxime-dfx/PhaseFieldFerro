@@ -1,276 +1,168 @@
-[output]
-MeshCreateFile = "maillage/maillage_structured"
-<<<<<<< HEAD
-OutputDir = "/mnt/d/Simulation_Results"
-=======
-OutputDir = "../output"
->>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
+    # ==============================================================================
+    # Fichier de Configuration TOML pour PhaseFieldFerro
+    # ==============================================================================
+    [output]
+    OutputDir = "../output"
+    MeshCreateFile = "maillage/maillage_structured"
 
-[debug]
-enabled = false
+    [debug]
+    enabled = false
 
-[chrono]
-chrono_mesh = true
-chrono_Polarization = true
-chrono_Mechanics = true
-chrono_Electrostatics = true
-chrono_Fracture = true
-chrono_run = true
-chrono_global = true
+    [chrono]
+    chrono_mesh = true
+    chrono_Polarization = true
+    chrono_Mechanics = true
+    chrono_Electrostatics = true
+    chrono_Fracture = true
+    chrono_run = true
 
-[physics]
-enable_polarization = true
-enable_mechanics = true
-enable_electrostatics = true
-enable_fracture = true
+    [physics]
+    enable_polarization = true
+    enable_mecanics = true        # Attention : orthographe sans 'h' comme dans Datafile.h
+    enable_electrostatics = true
+    enable_fracture = true
 
-[simulation]
-<<<<<<< HEAD
-total_time = 4.0
-dt = 0.01
-=======
-total_time = 3.0
-dt = 0.1
->>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
-save_frequency = 1
-tolerance_ferro = 1e-3
-tolerance_vfield = 1e-3
+    [simulation]
+    total_time = 5.0      # Cohérent avec t_end = 3.0 des conditions aux limites (100 pas x dt=0.03)
+    dt = 0.03
+    dt_relax = 0.1
+    save_frequency = 1
+    tolerance_ferro = 1e-3
+    tolerance_vfield = 1e-3
 
-[mesh]
-<<<<<<< HEAD
-L_x = 200.0
-L_y = 200.0
-n_x = 200
-n_y = 200
-=======
-L_x = 1.0
-L_y = 1.0
-n_x = 100
-n_y = 100
->>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
-element_type = "TRIANGLE"
+    [mesh]
+    calcul_mesh = true
+    L_x = 200.0
+    L_y = 200.0
+    n_x = 200
+    n_y = 200
+    element_type = "TRIANGLE"
 
-[polarization]
-initial_polarization = "UNIFORM"
-<<<<<<< HEAD
-=======
-# pinit = (1, 0) selon le papier (Section 3.1) : polarisation initiale
-# uniforme selon x1 dans TOUT le domaine.
->>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
-Px_0 = 1.0
-Py_0 = 0.0
+    [polarization]
+    initial_polarization = "UNIFORM"
+    Px_0 = 1.0
+    Py_0 = 0.0
 
-[mechanics]
-initial_mechanics = "UNIFORM"
-ux_0 = 0.0
-uy_0 = 0.0
+    [mechanics]
+    initial_mechanics = "UNIFORM"
+    ux_0 = 0.0
+    uy_0 = 0.0
 
-[electrostatics]
-E_0 = 0.0
+    [electrostatics]
+    initial_electrostatics = "UNIFORM"
+    Ex_0 = 0.0
+    Ey_0 = 0.0
 
-[fracture]
-<<<<<<< HEAD
-fracture_conditions = "IMPERMEABLE"
+    [fracture]
+    mode = "PERMEABLE"  # Remplacé "fracture_conditions" par "mode" comme dans Datafile.h
 
-=======
-# Premiere experience du papier (Section 3.2.1) : fissure PERMEABLE,
-# chargement mecanique seul (V=0).
-fracture_conditions = "PERMEABLE"
+    # ==============================================================================
+    # PARAMÈTRES MATÉRIAU (Doivent impérativement être dans [material])
+    # ==============================================================================
+    [material]
+    # Coefficients d'ordre supérieur (Landau)
+    alpha_1    = -0.0023
+    alpha_11   = -0.0029
+    alpha_12   = -0.0011
+    alpha_111  = 0.003
+    alpha_112  = -0.00068
+    alpha_1111 = 0.001
+    alpha_1112 = 0.0093
+    alpha_1122 = 1.24
+    # Coefficients mécaniques
+    b1 = 1.4282
+    b2 = -0.185
+    b3 = 0.8066
+    c1 = 185.0
+    c2 = 111.0
+    c3 = 74.0
+    # Paramètres généraux
+    eps0 = 0.131
+    t    = 300.0
+    P0   = 1.0
+    c0   = 1.0
+    xi   = 1.0
+    # Dynamique et Fracture
+    a0    = 0.1
+    Gc    = 4.0
+    kappa = 2.0
+    mu_p  = 1.0
+    mu_v  = 0.0667
+    eta_k = 1e-6
 
-# ------------------------------------------------------------
-# [material] — Valeurs normalisees du Tableau 1 (Abdollahi & Arias 2011)
-# ------------------------------------------------------------
->>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
-[material]
-alpha_1    = -0.0023
-alpha_11   = -0.0029
-alpha_12   = -0.0011
-alpha_111  = 0.003
-alpha_112  = -0.00068
-alpha_1111 = 0.001
-alpha_1112 = 0.0093
-alpha_1122 = 1.24
+    # ==============================================================================
+    # CONDITIONS AUX LIMITES (Tableau de structures)
+    # ==============================================================================
+    # --- Potentiel électrique ---
+    [[boundary_rule]]
+    field     = "phi"
+    shape     = "edge"
+    edge_name = "left"
+    bc_type   = "DIRICHLET"
+    profile   = "constant"
+    val       = 0.0
 
-b1 = 1.4282
-b2 = -0.185
-b3 = 0.8066
-c1 = 185.0
-c2 = 111.0
-c3 = 74.0
+    [[boundary_rule]]
+    field     = "phi"
+    shape     = "edge"
+    edge_name = "right"
+    bc_type   = "DIRICHLET"
+    profile   = "constant"
+    val       = 0.0
 
-eps0 = 0.131
+    # --- Déplacement mécanique ---
+    [[boundary_rule]]
+    field      = "uy"
+    shape      = "edge"
+    edge_name  = "top"
+    bc_type    = "DIRICHLET"
+    profile    = "time_ramp"
+    val_start  = 0.0
+    val_end    = 1.0
+    t_end      = 3.0
 
-<<<<<<< HEAD
-mu_p = 1.0
-mu_v = 15.0   
+    [[boundary_rule]]
+    field      = "uy"
+    shape      = "edge"
+    edge_name  = "bottom"
+    bc_type    = "DIRICHLET"
+    profile    = "time_ramp"
+    val_start  = 0.0
+    val_end    = -1.0
+    t_end      = 3.0
 
-a0 = 0.1
-Gc = 4.0
-kappa = 2.0
-eta_k = 1.0e-6
+    [[boundary_rule]]
+    field      = "uy"
+    shape      = "rect"
+    xmin       = 0.0
+    xmax       = 0.0
+    ymin       = 100.0   
+    ymax       = 200.0
+    bc_type    = "DIRICHLET"
+    profile    = "time_ramp"
+    val_start  = 0.0
+    val_end    = 1.0
+    t_end      = 3.0
 
-=======
-# Mobilites (Section 3.1) : 1/mu_p = lp = 1, 1/mu_v = lv = 15.
-# VERIFIE la convention dans Polarization.cpp/Fracture.cpp : si mu_p/mu_v
-# sont deja les MOBILITES dans ton code (pas leur inverse), ces valeurs
-# sont correctes ; sinon inverse-les (mu_p=1.0 -> 1.0, mu_v=15.0 -> 0.0667).
-mu_p = 1.0
-mu_v = 0.0667
+    [[boundary_rule]]
+    field      = "uy"
+    shape      = "rect"
+    xmin       = 0.0
+    xmax       = 0.0
+    ymin       = 0.0     
+    ymax       = 100.0
+    bc_type    = "DIRICHLET"
+    profile    = "time_ramp"
+    val_start  = 0.0
+    val_end    = -1.0
+    t_end      = 3.0
 
-a0 = 0.1
-Gc = 4.0
-
-# kappa : le papier prend kappa=2 avec h~1 sur un domaine 200x200 (h/L=0.005).
-# Ton maillage 100x100 sur L=1 donne h=0.01 (h/L=0.01). Pour rester dans le
-# meme regime physique, kappa = 2*h avec ton h reel :
-kappa = 0.02
-
-eta_k = 1.0e-6
->>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
-t  = 300.0
-P0 = 1.0
-xi = 1.0
-c0 = 1.0
-
-# ------------------------------------------------------------
-<<<<<<< HEAD
-# CONDITIONS AUX LIMITES (Chargement Électromécanique)
-# ------------------------------------------------------------
-
-# --- Électrique : Potentiel nul à gauche ---
-=======
-# Conditions aux limites — reproduction de la Fig. 3 du papier
-# (chargement mecanique seul, V=0)
-# ------------------------------------------------------------
-
-# --- Electrique : V=0 (pas de chargement electrique) ---
->>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
-[[boundary_rule]]
-field     = "phi"
-shape     = "edge"
-edge_name = "left"
-bc_type   = "DIRICHLET"
-profile   = "constant"
-val       = 0.0
-
-<<<<<<< HEAD
-# --- Électrique : Potentiel V = -0.6 à droite (Donne E = 3e-3) ---
-=======
->>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
-[[boundary_rule]]
-field     = "phi"
-shape     = "edge"
-edge_name = "right"
-bc_type   = "DIRICHLET"
-profile   = "constant"
-<<<<<<< HEAD
-val       = -0.6
-
-# --- Mécanique : déplacement vertical u± = (0, ±t) ---
-=======
-val       = 0.0
-
-# --- Mecanique : deplacement vertical monotone croissant u± = (0, ±t) ---
->>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
-[[boundary_rule]]
-field      = "uy"
-shape      = "edge"
-edge_name  = "top"
-bc_type    = "DIRICHLET"
-profile    = "time_ramp"
-val_start  = 0.0
-<<<<<<< HEAD
-val_end    = 4.0
-t_end      = 4.0
-=======
-val_end    = 1.0
-t_end      = 3.0
->>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
-
-[[boundary_rule]]
-field      = "uy"
-shape      = "edge"
-edge_name  = "bottom"
-bc_type    = "DIRICHLET"
-profile    = "time_ramp"
-val_start  = 0.0
-<<<<<<< HEAD
-val_end    = -4.0
-t_end      = 4.0
-
-# --- Amorçage de fissure (Moitié haute et basse du bord gauche) ---
-=======
-val_end    = -1.0
-t_end      = 3.0
-
-# --- Amorcage force au centre-gauche (Section 3.1) : u2± = ±t sur la
-# moitie haute et la moitie basse du bord gauche. Place APRES les regles
-# top/bottom ci-dessus pour qu'elles ecrasent les coins (x=0,y=0) et
-# (x=0,y=Ly) avec ces valeurs plus specifiques.
->>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
-[[boundary_rule]]
-field      = "uy"
-shape      = "rect"
-xmin       = 0.0
-xmax       = 0.0
-<<<<<<< HEAD
-ymin       = 100.0
-ymax       = 200.0
-bc_type    = "DIRICHLET"
-profile    = "time_ramp"
-val_start  = 0.0
-val_end    = 3.0
-=======
-ymin       = 0.5
-ymax       = 1.0
-bc_type    = "DIRICHLET"
-profile    = "time_ramp"
-val_start  = 0.0
-val_end    = 1.0
->>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
-t_end      = 3.0
-
-[[boundary_rule]]
-field      = "uy"
-shape      = "rect"
-xmin       = 0.0
-xmax       = 0.0
-ymin       = 0.0
-<<<<<<< HEAD
-ymax       = 100.0
-bc_type    = "DIRICHLET"
-profile    = "time_ramp"
-val_start  = 0.0
-val_end    = -3.0
-t_end      = 3.0
-
-# --- Blocage du mode de corps rigide (ux = 0 en un point) ---
-=======
-ymax       = 0.5
-bc_type    = "DIRICHLET"
-profile    = "time_ramp"
-val_start  = 0.0
-val_end    = -1.0
-t_end      = 3.0
-
-# --- Blocage du mode de corps rigide en ux ---
->>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
-[[boundary_rule]]
-field     = "ux"
-bc_type   = "DIRICHLET"
-shape     = "point"
-px        = 0.0
-py        = 0.0
-edge_name = "bottom"
-profile   = "constant"
-<<<<<<< HEAD
-val       = 0.0
-=======
-val       = 0.0
-
-# --- Polarisation : AUCUNE regle px/py -> Neumann naturel (dp/dn=0) sur
-# tous les bords par defaut, conforme a la condition de polarisation
-# libre du papier (Section 3.1), confirme par BoundaryManager::update_time
-# qui initialise tous les noeuds a {NEUMANN, 0.0} avant application des
-# regles.
->>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
+    [[boundary_rule]]
+    field     = "ux"
+    shape     = "point"
+    px        = 0.0
+    py        = 0.0
+    edge_name = "bottom"
+    bc_type   = "DIRICHLET"
+    profile   = "constant"
+    val       = 0.0

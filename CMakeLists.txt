@@ -29,12 +29,9 @@ set(CORE_SOURCES
     core/src/Core/Mesh.cpp
 
     core/src/IO/Datafile.cpp
-<<<<<<< HEAD
-    core/src/IO/Diagnostics.cpp
-=======
     core/src/IO/MetricsLogger.cpp
->>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
     core/src/IO/ResultsExporter.cpp
+    core/src/IO/Diagnostics.cpp
 
     core/src/Utils/ProgressBar.cpp
     core/src/Utils/Fields.cpp
@@ -47,8 +44,7 @@ set(CORE_SOURCES
     core/src/Physics/Fracture.cpp
 
     core/src/Simulation.cpp
-
-    core/src/main.cpp
+    # ATTENTION : core/src/main.cpp a été retiré d'ici pour éviter les conflits !
 )
 
 add_library(CoreLib STATIC ${CORE_SOURCES})
@@ -60,7 +56,7 @@ target_include_directories(CoreLib PUBLIC core/include)
 if(OpenMP_CXX_FOUND)
     target_link_libraries(CoreLib PUBLIC OpenMP::OpenMP_CXX)
 endif()
-target_link_libraries(CoreLib PUBLIC Eigen3::Eigen) # <-- NOUVEAU : Lien avec Eigen
+target_link_libraries(CoreLib PUBLIC Eigen3::Eigen) 
 
 # Flags HPC appliqués à la bibliothèque
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -88,10 +84,19 @@ add_test(NAME PhysicsTest COMMAND UnitTests)
 add_test(NAME MeshTest COMMAND MeshTests)
 
 # ==========================================
-# Cible personnalisée : Nettoyage des datas
+# Sécurisation de la mémoire sous Windows (MinGW)
+# ==========================================
+if(MINGW)
+    # Augmente la taille de la pile (Stack) des exécutables à 16 Mo pour éviter les Segfaults
+    target_link_options(PhaseFieldFerro PRIVATE -Wl,--stack,16777216)
+    target_link_options(UnitTests PRIVATE -Wl,--stack,16777216)
+    target_link_options(MeshTests PRIVATE -Wl,--stack,16777216)
+endif()
+
+# ==========================================
+# Cibles personnalisées : Nettoyage des datas
 # ==========================================
 add_custom_target(clean-output
-    # Note : remove_directory supprime le dossier entier, on ne met pas de *.vtk à la fin.
     COMMAND ${CMAKE_COMMAND} -E remove_directory "${CMAKE_BINARY_DIR}/output"
     COMMAND ${CMAKE_COMMAND} -E remove_directory "${CMAKE_SOURCE_DIR}/output"
     COMMAND ${CMAKE_COMMAND} -E remove_directory "${CMAKE_BINARY_DIR}/output"

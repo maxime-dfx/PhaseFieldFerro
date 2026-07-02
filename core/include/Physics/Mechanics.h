@@ -20,24 +20,17 @@ class Mechanics {
         Eigen::VectorXd uy_prev_iter;
         Eigen::SparseMatrix<double> K_global;
         Eigen::VectorXd F_global;
-<<<<<<< HEAD
-        Eigen::VectorXd ux_backup;
-        Eigen::VectorXd uy_backup;
-=======
->>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
 
         double ux_0;
         double uy_0;
         const Datafile& config;
         const Mesh& mesh;
         const BoundaryManager& bc_manager; 
-<<<<<<< HEAD
-        
-        void assemble_mechanical_system(const Polarization& polarization, const Fracture& fracture, const Math& math,
-                                        std::vector<Eigen::Triplet<double>>& triplets);
-        void map_global_vector_to_components(const Eigen::VectorXd& U_new);
-=======
->>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
+
+        // Solveur persistant : analyzePattern() une seule fois (le pattern de
+        // sparsite du maillage ne change jamais), factorize() a chaque pas.
+        Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> solver_;
+        bool pattern_analyzed_ = false;
 
     public:
         Mechanics(const Datafile& config, const Mesh& mesh, const BoundaryManager& bc_manager);
@@ -59,29 +52,16 @@ class Mechanics {
         }
 
         Eigen::Matrix2d get_strain_at_gp(const Element& elem, const GaussPoint2D& gp, const std::vector<std::array<double, 2>>& coords) const;
-<<<<<<< HEAD
-        void save_previous_state() {
-            if (ux_backup.size() != ux_current.size()) {
-                ux_backup.resize(ux_current.size());
-                uy_backup.resize(uy_current.size());
-            }
-            ux_backup = ux_current;
-            uy_backup = uy_current;
+
+        void set_state(const Eigen::VectorXd& ux, const Eigen::VectorXd& uy) {
+            ux_current = ux;
+            uy_current = uy;
+            ux_prev_iter = ux;
+            uy_prev_iter = uy;
         }
-        void restore_previous_state() {
-            ux_current = ux_backup;
-            uy_current = uy_backup;
-        }
-        void update_history() {
-        }
-=======
->>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
+
         
     private:
         void apply_boundary_conditions(Eigen::SparseMatrix<double>& K, Eigen::VectorXd& F, 
                                        const std::vector<NodeBC>& bcs_x, const std::vector<NodeBC>& bcs_y);
-<<<<<<< HEAD
-
-=======
->>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
 };

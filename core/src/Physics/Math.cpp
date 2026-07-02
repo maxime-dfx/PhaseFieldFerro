@@ -66,9 +66,9 @@ double Math::W_energy(const Eigen::Vector2d& Pi, const Eigen::Matrix2d& epsjk) c
     return -0.5 * mat.b1 *(epsjk(0,0)*p1_2 + epsjk(1,1)*p2_2)
             -0.5 * mat.b2 *(epsjk(0,0)*p2_2 + epsjk(1,1)*p1_2)
             - mat.b3 * (epsjk(1,0) + epsjk(0,1)) * p1 * p2
-            + mat.c1 * (epsjk(0,0)*epsjk(0,0) + epsjk(1,1)*epsjk(1,1))
+            + 0.5 * mat.c1 * (epsjk(0,0)*epsjk(0,0) + epsjk(1,1)*epsjk(1,1))   
             + mat.c2 * (epsjk(0,0)*epsjk(1,1))
-            + mat.c3 * (epsjk(0,1)*epsjk(0,1) + epsjk(1,0)*epsjk(1,0));
+            + 0.5 * mat.c3 * (epsjk(0,1)*epsjk(0,1) + epsjk(1,0)*epsjk(1,0)); 
 }
 
 double Math::dW_dp1(const Eigen::Vector2d& Pi, const Eigen::Matrix2d& epsjk) const {
@@ -144,7 +144,6 @@ double Math::h_enthalpy_density(double U, double W, double chi, const Eigen::Vec
     return U + W + chi - mat.eps0/2*E.squaredNorm() - E.dot(Pi);
 }
 
-<<<<<<< HEAD
 Eigen::Matrix3d Math::get_elastic_matrix() const {
     Eigen::Matrix3d C;
     C << mat.c1, mat.c2, 0.0,
@@ -188,6 +187,4 @@ double Math::compute_polarization_force(int component, const Eigen::Vector2d& Pi
         return - (penalite_fracture * (dW - E_gp) + dchi);
     }
 }
-=======
->>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
 

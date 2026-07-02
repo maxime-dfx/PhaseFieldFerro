@@ -2,6 +2,7 @@
 #include "IO/Datafile.h"
 #include "Core/Mesh.h"
 #include "IO/ResultsExporter.h"
+#include "IO/Diagnostics.h"
 #include "Utils/Chrono.h"
 #include "Utils/Logger.h"
 #include "Utils/ProgressBar.h"
@@ -11,10 +12,6 @@
 #include "Physics/Electrostatics.h"
 #include "Physics/Fracture.h"
 #include "Physics/Polarization.h"
-<<<<<<< HEAD
-#include "IO/Diagnostics.h"
-=======
->>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
 
 class Simulation {
 private:
@@ -29,21 +26,19 @@ private:
     Electrostatics electrostatics;
     Fracture fracture;
     Polarization polarization;
+    Diagnostics diagnostics;
     Chrono chrono;
-<<<<<<< HEAD
-    Diagnostics diagnostics;   
-    std::string energy_csv_path; 
-=======
->>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
+
+    std::string diagnostics_csv_path;
+    std::string restart_path_;
 
 public:
     Simulation(const Datafile& config, const Mesh& mesh, ResultsExporter& exporter);
     void initializeMesh();
     void initializePhysics();
-<<<<<<< HEAD
-    int ComputeOneStepPhysics(double time, double dt);
-=======
     void ComputeOneStepPhysics(double time);
->>>>>>> 1b56e6de1054186eb666ba43dbeb72efb8eda2da
+    void set_restart_path(const std::string& path) { restart_path_ = path; }
+    void save_checkpoint(const std::string& path, double time, int step) const;
+    void load_checkpoint(const std::string& path, double& time, int& step);
     void run();
 };

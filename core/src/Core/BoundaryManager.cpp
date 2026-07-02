@@ -95,8 +95,9 @@ void BoundaryManager::update_time(double t) {
         }
     };
 
-    apply_rules(m_rules_phi, m_bc_phi); apply_rules(m_rules_ux, m_bc_ux);
-    apply_rules(m_rules_uy, m_bc_uy); apply_rules(m_rules_px, m_bc_px); apply_rules(m_rules_py, m_bc_py);
+    apply_rules(m_rules_phi, m_bc_phi); 
+    apply_rules(m_rules_ux, m_bc_ux); apply_rules(m_rules_uy, m_bc_uy); 
+    apply_rules(m_rules_px, m_bc_px); apply_rules(m_rules_py, m_bc_py);
 }
 
 void BoundaryManager::clear_all_rules() {

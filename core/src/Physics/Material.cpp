@@ -26,4 +26,5 @@ Material::Material(const Datafile& config) {
     alpha_112 = config.get_alpha_112();
     alpha_1112 = config.get_alpha_1112();
     alpha_1122 = config.get_alpha_1122();
+
 }

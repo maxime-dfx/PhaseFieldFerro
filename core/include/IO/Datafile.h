@@ -176,6 +176,9 @@ public:
     double get_dt() const {
         return get_val<double>(m_config, "simulation", "dt", 0.1);
     }
+    double get_dt_relax() const { 
+        return get_val<double>(m_config, "simulation", "dt_relax", 0.1);
+    }
     int get_save_frequency() const {
         return get_val<int>(m_config, "simulation", "save_frequency", 10);
     }
