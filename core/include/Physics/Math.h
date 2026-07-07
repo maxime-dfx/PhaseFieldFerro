@@ -1,19 +1,17 @@
-#ifndef PHYSICS_MATH_H
-#define PHYSICS_MATH_H
-
-#include "Physics/Material.h"
+#pragma once
 #include <Eigen/Dense>
+#include "IO/Datafile.h"
 
 class Math {
-private:
-    const Material& mat;
-
 public:
+    // Variables du matériau stockées localement en toute sécurité
     double xi, c0, mu_p, mu_v, a0, P0, t, eta_k, eps0;
     double alpha1, alpha11, alpha12, alpha111, alpha112, alpha1111, alpha1112, alpha1122;
     double b1, b2, b3, c1, c2, c3;
 
-    Math(const Material& mat_in);
+    // Le constructeur prend désormais le Datafile
+    Math(const Datafile& config);
+    
     void DimensionLess();
 
     double U_energy(const Eigen::Matrix2d& Pij) const;
@@ -36,5 +34,3 @@ public:
                                       const Eigen::Matrix2d& eps, double E_gp, 
                                       double penalite_fracture, bool is_impermeable) const;
 };
-
-#endif

@@ -27,6 +27,8 @@ find_package(Eigen3 REQUIRED)
 set(CORE_SOURCES
     core/src/Core/BoundaryManager.cpp
     core/src/Core/Mesh.cpp
+    core/src/Core/MeshGenerator.cpp
+    core/src/Core/MeshGeneratorGmsh.cpp
 
     core/src/IO/Datafile.cpp
     core/src/IO/MetricsLogger.cpp
@@ -36,12 +38,19 @@ set(CORE_SOURCES
     core/src/Utils/ProgressBar.cpp
     core/src/Utils/Fields.cpp
 
+    core/src/Physics/MechanicsAssembler.cpp
+    core/src/Physics/ElectrostaticsAssembler.cpp
+    core/src/Physics/FractureAssembler.cpp
+    core/src/Physics/PolarizationAssembler.cpp
     core/src/Physics/Material.cpp
     core/src/Physics/Math.cpp
     core/src/Physics/Polarization.cpp
     core/src/Physics/Mechanics.cpp
     core/src/Physics/Electrostatics.cpp
     core/src/Physics/Fracture.cpp
+
+
+    core/src/Solvers/LinearSolver.cpp
 
     core/src/Simulation.cpp
     # ATTENTION : core/src/main.cpp a été retiré d'ici pour éviter les conflits !

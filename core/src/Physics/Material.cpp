@@ -2,29 +2,27 @@
 #include "IO/Datafile.h"
 
 Material::Material(const Datafile& config) {
-
     // Initialisation des coefficients du modèle de Landau-Devonshire
-    a0 = config.get_a0(); // Coefficient linéaire
-    b1 = config.get_b1(); b2 = config.get_b2(); b3 = config.get_b3(); // Coefficients quadratiques
-    c1 = config.get_c1(); c2 = config.get_c2(); c3 = config.get_c3(); // Coefficients cubiques
+    a0 = config.material.a0; 
+    b1 = config.material.b1; b2 = config.material.b2; b3 = config.material.b3; 
+    c1 = config.material.c1; c2 = config.material.c2; c3 = config.material.c3; 
 
-    eps0 = config.get_eps0(); // Permittivité du vide
-    t = config.get_t(); // Température
-    P0 = config.get_P0(); // Polarisation de saturation
-    mu_p = config.get_mu_p(); // Coefficient de viscosité
-    mu_v = config.get_mu_v(); // Coefficient de viscosité
-    xi = config.get_xi(); // Coefficient de couplage électromécanique
-    c0 = config.get_c0(); // Coefficient de rigidité
-    eta_k = config.get_eta_k(); // Coefficient de pénalisation pour la fracture
+    eps0 = config.material.eps0; 
+    t = config.material.t; 
+    P0 = config.material.P0; 
+    mu_p = config.material.mu_p; 
+    mu_v = config.material.mu_v; 
+    xi = config.material.xi; 
+    c0 = config.material.c0; 
+    eta_k = config.material.eta_k; 
 
     // Coefficients d'ordre supérieur pour le modèle de Landau-Devonshire
-    alpha_1 = config.get_alpha_1();
-    alpha_11 = config.get_alpha_11();
-    alpha_111 = config.get_alpha_111();
-    alpha_1111 = config.get_alpha_1111();
-    alpha_12 = config.get_alpha_12();
-    alpha_112 = config.get_alpha_112();
-    alpha_1112 = config.get_alpha_1112();
-    alpha_1122 = config.get_alpha_1122();
-
+    alpha_1 = config.material.alpha_1;
+    alpha_11 = config.material.alpha_11;
+    alpha_111 = config.material.alpha_111;
+    alpha_1111 = config.material.alpha_1111;
+    alpha_12 = config.material.alpha_12;
+    alpha_112 = config.material.alpha_112;
+    alpha_1112 = config.material.alpha_1112;
+    alpha_1122 = config.material.alpha_1122;
 }

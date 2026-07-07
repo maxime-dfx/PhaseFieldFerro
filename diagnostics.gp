@@ -4,7 +4,7 @@
 # ==============================================================================
 
 set datafile separator ","
-CSV = "../output/diagnostics.csv"   # <-- change le nom/chemin si besoin
+CSV = "../output/energies_final.csv"   # <-- change le nom/chemin si besoin
 
 set terminal pngcairo size 1000,750 enhanced font "Arial,12"
 set grid
@@ -22,7 +22,7 @@ plot CSV using 1:8 with linespoints lw 2 pt 7 ps 0.5 lc rgb "blue" title "surfac
 # ------------------------------------------------------------------
 # 2 Energie totale vs pas de charge
 # ------------------------------------------------------------------
-set output "02_total_energy.png"
+set output "../results/graphiques/02_total_energy.png"
 set title "Energie totale du systeme"
 set xlabel "Load step"
 set ylabel "Total energy"

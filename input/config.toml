@@ -1,168 +1,167 @@
-    # ==============================================================================
-    # Fichier de Configuration TOML pour PhaseFieldFerro
-    # ==============================================================================
-    [output]
-    OutputDir = "../output"
-    MeshCreateFile = "maillage/maillage_structured"
+# ==============================================================================
+# Fichier de Configuration TOML pour PhaseFieldFerro - MODE DEBUG / DIAGNOSTIC
+# ==============================================================================
+[output]
+OutputDir = "../output"
+MeshCreateFile = "maillage/maillage_gmsh"
 
-    [debug]
-    enabled = false
+[debug]
+enabled = false    # <-- ACTIVE pour voir les logs de convergence (m, err_p, err_v)
+                  #     et les messages "Non-convergence au temps ..."
 
-    [chrono]
-    chrono_mesh = true
-    chrono_Polarization = true
-    chrono_Mechanics = true
-    chrono_Electrostatics = true
-    chrono_Fracture = true
-    chrono_run = true
+[chrono]
+chrono_mesh = true
+chrono_Polarization = true
+chrono_Mechanics = true
+chrono_Electrostatics = true
+chrono_Fracture = true
+chrono_run = true
 
-    [physics]
-    enable_polarization = true
-    enable_mecanics = true        # Attention : orthographe sans 'h' comme dans Datafile.h
-    enable_electrostatics = true
-    enable_fracture = true
+[physics]
+enable_polarization = true
+enable_mecanics = true        # Attention : orthographe sans 'h' comme dans Datafile.h
+enable_electrostatics = true
+enable_fracture = true
 
-    [simulation]
-    total_time = 5.0      # Cohérent avec t_end = 3.0 des conditions aux limites (100 pas x dt=0.03)
-    dt = 0.03
-    dt_relax = 0.1
-    save_frequency = 1
-    tolerance_ferro = 1e-3
-    tolerance_vfield = 1e-3
+[simulation]
+total_time = 10.0
+dt = 0.03
+dt_relax = 0.1
+save_frequency = 1            # <-- garde a 1 pour avoir un VTK a CHAQUE step accepte,
+                              #     indispensable pour retrouver l'instant exact du blow-up
+tolerance_ferro = 1e-3
+tolerance_vfield = 1e-3
 
-    [mesh]
-    calcul_mesh = true
-    L_x = 200.0
-    L_y = 200.0
-    n_x = 200
-    n_y = 200
-    element_type = "TRIANGLE"
+[mesh]
+calcul_mesh = true
+L_x = 200.0
+L_y = 200.0
+n_x = 200                     # non utilise si mesh_source = "gmsh", garde pour compatibilite
+n_y = 200
+element_type = "TRIANGLE"
+mesh_source = "gmsh"          # <-- a adapter selon comment tu as branche le choix
+                              #     structure/gmsh dans ton main.cpp
+gmsh_file = "rectangle.msh"   # chemin vers le maillage genere par Gmsh
 
-    [polarization]
-    initial_polarization = "UNIFORM"
-    Px_0 = 1.0
-    Py_0 = 0.0
+[polarization]
+initial_polarization = "UNIFORM"
+Px_0 = 1.0
+Py_0 = 0.0
 
-    [mechanics]
-    initial_mechanics = "UNIFORM"
-    ux_0 = 0.0
-    uy_0 = 0.0
+[mechanics]
+initial_mechanics = "UNIFORM"
+ux_0 = 0.0
+uy_0 = 0.0
 
-    [electrostatics]
-    initial_electrostatics = "UNIFORM"
-    Ex_0 = 0.0
-    Ey_0 = 0.0
+[electrostatics]
+initial_electrostatics = "UNIFORM"
+Ex_0 = 0.0
+Ey_0 = 0.0
 
-    [fracture]
-    mode = "PERMEABLE"  # Remplacé "fracture_conditions" par "mode" comme dans Datafile.h
+[fracture]
+mode = "PERMEABLE"
 
-    # ==============================================================================
-    # PARAMÈTRES MATÉRIAU (Doivent impérativement être dans [material])
-    # ==============================================================================
-    [material]
-    # Coefficients d'ordre supérieur (Landau)
-    alpha_1    = -0.0023
-    alpha_11   = -0.0029
-    alpha_12   = -0.0011
-    alpha_111  = 0.003
-    alpha_112  = -0.00068
-    alpha_1111 = 0.001
-    alpha_1112 = 0.0093
-    alpha_1122 = 1.24
-    # Coefficients mécaniques
-    b1 = 1.4282
-    b2 = -0.185
-    b3 = 0.8066
-    c1 = 185.0
-    c2 = 111.0
-    c3 = 74.0
-    # Paramètres généraux
-    eps0 = 0.131
-    t    = 300.0
-    P0   = 1.0
-    c0   = 1.0
-    xi   = 1.0
-    # Dynamique et Fracture
-    a0    = 0.1
-    Gc    = 4.0
-    kappa = 2.0
-    mu_p  = 1.0
-    mu_v  = 0.0667
-    eta_k = 1e-6
+# ==============================================================================
+# PARAMÈTRES MATÉRIAU - identiques a la Table 1 du papier (Abdollahi & Arias, 2011)
+# ==============================================================================
+[material]
+alpha_1    = -0.0023
+alpha_11   = -0.0029
+alpha_12   = -0.0011
+alpha_111  = 0.003
+alpha_112  = -0.00068
+alpha_1111 = 0.001
+alpha_1112 = 0.0093
+alpha_1122 = 1.24
+b1 = 1.4282
+b2 = -0.185
+b3 = 0.8066
+c1 = 185.0
+c2 = 111.0
+c3 = 74.0
+eps0 = 0.131
+t    = 300.0
+P0   = 1.0
+c0   = 1.0
+xi   = 1.0
+a0    = 0.1
+Gc    = 4.0
+kappa = 2.0
+mu_p  = 1.0
+mu_v  = 15 
+eta_k = 1e-6
 
-    # ==============================================================================
-    # CONDITIONS AUX LIMITES (Tableau de structures)
-    # ==============================================================================
-    # --- Potentiel électrique ---
-    [[boundary_rule]]
-    field     = "phi"
-    shape     = "edge"
-    edge_name = "left"
-    bc_type   = "DIRICHLET"
-    profile   = "constant"
-    val       = 0.0
+# ==============================================================================
+# CONDITIONS AUX LIMITES
+# ==============================================================================
+[[boundary_rule]]
+field     = "phi"
+shape     = "edge"
+edge_name = "left"
+bc_type   = "DIRICHLET"
+profile   = "constant"
+val       = 0.0
 
-    [[boundary_rule]]
-    field     = "phi"
-    shape     = "edge"
-    edge_name = "right"
-    bc_type   = "DIRICHLET"
-    profile   = "constant"
-    val       = 0.0
+[[boundary_rule]]
+field     = "phi"
+shape     = "edge"
+edge_name = "right"
+bc_type   = "DIRICHLET"
+profile   = "constant"
+val       = 0.0
 
-    # --- Déplacement mécanique ---
-    [[boundary_rule]]
-    field      = "uy"
-    shape      = "edge"
-    edge_name  = "top"
-    bc_type    = "DIRICHLET"
-    profile    = "time_ramp"
-    val_start  = 0.0
-    val_end    = 1.0
-    t_end      = 3.0
+[[boundary_rule]]
+field      = "uy"
+shape      = "edge"
+edge_name  = "top"
+bc_type    = "DIRICHLET"
+profile    = "time_ramp"
+val_start  = 0.0
+val_end    = 4.0
+t_end      = 4.0
 
-    [[boundary_rule]]
-    field      = "uy"
-    shape      = "edge"
-    edge_name  = "bottom"
-    bc_type    = "DIRICHLET"
-    profile    = "time_ramp"
-    val_start  = 0.0
-    val_end    = -1.0
-    t_end      = 3.0
+[[boundary_rule]]
+field      = "uy"
+shape      = "edge"
+edge_name  = "bottom"
+bc_type    = "DIRICHLET"
+profile    = "time_ramp"
+val_start  = 0.0
+val_end    = -4.0
+t_end      = 4.0
 
-    [[boundary_rule]]
-    field      = "uy"
-    shape      = "rect"
-    xmin       = 0.0
-    xmax       = 0.0
-    ymin       = 100.0   
-    ymax       = 200.0
-    bc_type    = "DIRICHLET"
-    profile    = "time_ramp"
-    val_start  = 0.0
-    val_end    = 1.0
-    t_end      = 3.0
+[[boundary_rule]]
+field      = "uy"
+shape      = "rect"
+xmin       = 0.0
+xmax       = 0.0
+ymin       = 100.0
+ymax       = 200.0
+bc_type    = "DIRICHLET"
+profile    = "time_ramp"
+val_start  = 0.0
+val_end    = 4.0
+t_end      = 4.0
 
-    [[boundary_rule]]
-    field      = "uy"
-    shape      = "rect"
-    xmin       = 0.0
-    xmax       = 0.0
-    ymin       = 0.0     
-    ymax       = 100.0
-    bc_type    = "DIRICHLET"
-    profile    = "time_ramp"
-    val_start  = 0.0
-    val_end    = -1.0
-    t_end      = 3.0
+[[boundary_rule]]
+field      = "uy"
+shape      = "rect"
+xmin       = 0.0
+xmax       = 0.0
+ymin       = 0.0
+ymax       = 100.0
+bc_type    = "DIRICHLET"
+profile    = "time_ramp"
+val_start  = 0.0
+val_end    = -4.0
+t_end      = 4.0
 
-    [[boundary_rule]]
-    field     = "ux"
-    shape     = "point"
-    px        = 0.0
-    py        = 0.0
-    edge_name = "bottom"
-    bc_type   = "DIRICHLET"
-    profile   = "constant"
-    val       = 0.0
+[[boundary_rule]]
+field     = "ux"
+shape     = "point"
+px        = 0.0
+py        = 0.0
+edge_name = "bottom"
+bc_type   = "DIRICHLET"
+profile   = "constant"
+val       = 0.0

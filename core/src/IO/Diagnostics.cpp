@@ -30,7 +30,7 @@ void Diagnostics::integrate_bulk_terms(const Polarization& polarization,
                                         const Math& math,
                                         EnergyRecord& rec) const {
     double U_sum = 0.0, W_sum = 0.0, chi_sum = 0.0, elec_sum = 0.0;
-    const bool is_impermeable = (config.get_fracture_mode() == CrackBCType::IMPERMEABLE);
+    const bool is_impermeable = (config.fracture_mode == CrackBCType::IMPERMEABLE);
     const auto& elements = mesh.get_elements();
 
     for (size_t elem_idx = 0; elem_idx < elements.size(); ++elem_idx) {
@@ -125,8 +125,8 @@ void Diagnostics::integrate_bulk_terms(const Polarization& polarization,
 
 void Diagnostics::integrate_surface_term(const Fracture& fracture, EnergyRecord& rec) const {
     double surf_sum = 0.0;
-    const double Gc = config.get_Gc();
-    const double kappa = config.get_kappa();
+    const double Gc = config.material.Gc;
+    const double kappa = config.material.kappa;
     const auto& elements = mesh.get_elements();
 
     for (size_t elem_idx = 0; elem_idx < elements.size(); ++elem_idx) {
@@ -314,9 +314,9 @@ void Diagnostics::compute_nodal_energies(const Polarization& polarization,
     surf_nodal.setZero(n_nodes);
     Eigen::VectorXd M_lumped = Eigen::VectorXd::Zero(n_nodes);
 
-    const bool is_impermeable = (config.get_fracture_mode() == CrackBCType::IMPERMEABLE);
-    const double Gc = config.get_Gc();
-    const double kappa = config.get_kappa();
+    const bool is_impermeable = (config.fracture_mode == CrackBCType::IMPERMEABLE);
+    const double Gc = config.material.Gc;
+    const double kappa = config.material.kappa;
     const auto& elements = mesh.get_elements();
 
     for (size_t elem_idx = 0; elem_idx < elements.size(); ++elem_idx) {

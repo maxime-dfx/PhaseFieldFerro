@@ -1,5 +1,6 @@
 #include "Core/BoundaryManager.h"
 #include <algorithm>
+#include <cmath>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -36,7 +37,7 @@ namespace Profiles {
             return max_val * (1.0 - (dist * dist) / (width * width));
         };
     }
-    
+
     inline BCProfile TravelingWave(double amplitude, double k, double omega) {
         return [=](double x, double, double t) {
             return amplitude * std::sin(k * x - omega * t);
@@ -45,15 +46,11 @@ namespace Profiles {
 }
 
 BoundaryManager::BoundaryManager(const Mesh& mesh, const Datafile& config)
-    : m_mesh(mesh), m_config(config) 
+    : m_mesh(mesh), m_config(config)
 {
-    int n_nodes = m_mesh.get_nx() * m_mesh.get_ny();
+    int n_nodes = m_mesh.get_num_nodes();
     m_bc_phi.resize(n_nodes); m_bc_ux.resize(n_nodes); m_bc_uy.resize(n_nodes);
     m_bc_px.resize(n_nodes); m_bc_py.resize(n_nodes);
-    Logger::debug("[DEBUG][BCManager] phi_bcs.size()=" + std::to_string(get_phi_bcs().size()) + "\n", m_config.debug_enabled());
-    size_t n_d = 0;
-    for (auto& bc : get_phi_bcs()) if (bc.type == BCType::DIRICHLET) n_d++;
-    Logger::debug("[DEBUG][BCManager] phi dirichlet count=" + std::to_string(n_d) + "\n", m_config.debug_enabled());
 }
 
 void BoundaryManager::add_rule_phi(std::shared_ptr<BoundaryShape> shape, BCType type, BCProfile profile) { m_rules_phi.push_back({shape, type, profile}); }
@@ -69,9 +66,8 @@ void BoundaryManager::add_rule_px_constant(std::shared_ptr<BoundaryShape> shape,
 void BoundaryManager::add_rule_py_constant(std::shared_ptr<BoundaryShape> shape, BCType type, double value)  { add_rule_py(shape, type, Profiles::Constant(value)); }
 
 void BoundaryManager::update_time(double t) {
-    int nx = m_mesh.get_nx(), ny = m_mesh.get_ny();
-    double dx = m_mesh.get_dx(), dy = m_mesh.get_dy();
-    Logger::debug("[BCManager] nx=" + std::to_string(nx) + " ny=" + std::to_string(ny) + " dx=" + std::to_string(dx) + " dy=" + std::to_string(dy) + "\n", m_config.debug_enabled());
+    const auto& all_nodes = m_mesh.get_nodes();
+    int n_nodes = static_cast<int>(all_nodes.size());
 
     NodeBC def = {BCType::NEUMANN, 0.0};
     std::fill(m_bc_phi.begin(), m_bc_phi.end(), def);
@@ -82,22 +78,23 @@ void BoundaryManager::update_time(double t) {
 
     auto apply_rules = [&](const std::vector<BCRule>& rules, std::vector<NodeBC>& nodal_bcs) {
         if (rules.empty()) return;
+
         for (const auto& rule : rules) {
-            for (int j = 0; j < ny; ++j) {
-                double y = j * dy;
-                for (int i = 0; i < nx; ++i) {
-                    double x = i * dx;
-                    if (rule.shape->contains(x, y)) {
-                        nodal_bcs[j * nx + i] = {rule.type, rule.profile(x, y, t)};
-                    }
+            for (int idx = 0; idx < n_nodes; ++idx) {
+                double x = all_nodes[idx].x;
+                double y = all_nodes[idx].y;
+                if (rule.shape->contains(x, y)) {
+                    nodal_bcs[idx] = {rule.type, rule.profile(x, y, t)};
                 }
             }
         }
     };
 
-    apply_rules(m_rules_phi, m_bc_phi); 
-    apply_rules(m_rules_ux, m_bc_ux); apply_rules(m_rules_uy, m_bc_uy); 
-    apply_rules(m_rules_px, m_bc_px); apply_rules(m_rules_py, m_bc_py);
+    apply_rules(m_rules_phi, m_bc_phi);
+    apply_rules(m_rules_ux, m_bc_ux);
+    apply_rules(m_rules_uy, m_bc_uy);
+    apply_rules(m_rules_px, m_bc_px);
+    apply_rules(m_rules_py, m_bc_py);
 }
 
 void BoundaryManager::clear_all_rules() {
@@ -105,7 +102,7 @@ void BoundaryManager::clear_all_rules() {
 }
 
 void BoundaryManager::initialize_all_boundaries() {
-    auto rules = m_config.get_boundary_rules();
+    auto rules = m_config.boundary_rules;
     double Lx = m_mesh.get_Lx();
     double Ly = m_mesh.get_Ly();
 
@@ -115,7 +112,7 @@ void BoundaryManager::initialize_all_boundaries() {
         else if (r.shape == "point")  shape = std::make_shared<PointShape>(r.px, r.py);
         else if (r.shape == "circle") shape = std::make_shared<CircleShape>(r.cx, r.cy, r.radius);
         else if (r.shape == "rect")   shape = std::make_shared<RectShape>(r.xmin, r.xmax, r.ymin, r.ymax);
-        else continue; 
+        else continue;
 
         BCProfile profile;
         if (r.profile == "constant")              profile = Profiles::Constant(r.val);
@@ -124,10 +121,10 @@ void BoundaryManager::initialize_all_boundaries() {
         else if (r.profile == "spatial_tanh")     profile = Profiles::SpatialTanhX(r.P0, r.x0, r.epsilon);
         else if (r.profile == "spatial_parabola") profile = Profiles::SpatialParabolaY(r.max_val, r.y_center, r.width);
         else if (r.profile == "traveling_wave")   profile = Profiles::TravelingWave(r.amplitude, r.k, r.omega);
-        else profile = Profiles::Constant(r.val); 
+        else profile = Profiles::Constant(r.val);
 
         BCType type = (r.bc_type == "NEUMANN") ? BCType::NEUMANN : BCType::DIRICHLET;
-        
+
         if (r.field == "phi")      add_rule_phi(shape, type, profile);
         else if (r.field == "ux")  add_rule_ux(shape, type, profile);
         else if (r.field == "uy")  add_rule_uy(shape, type, profile);
