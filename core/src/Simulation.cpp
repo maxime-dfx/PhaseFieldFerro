@@ -115,7 +115,19 @@ int Simulation::compute_one_step_physics(double time, double dt) {
 // =========================================================================
 void Simulation::run() {
     if (config.chrono.run) chrono.start();
-    
+    Logger::debug( "xi=" + std::to_string(config.material.xi) + " c0=" + std::to_string(config.material.c0) +
+                   " mu_p=" + std::to_string(config.material.mu_p) + " mu_v=" + std::to_string(config.material.mu_v) +
+                   " a0=" + std::to_string(config.material.a0) + " P0=" + std::to_string(config.material.P0) +
+                   " t=" + std::to_string(config.material.t) + " eta_k=" + std::to_string(config.material.eta_k) +
+                   " eps0=" + std::to_string(config.material.eps0) +
+                   " | alpha1=" + std::to_string(config.material.alpha_1) + " alpha11=" + std::to_string(config.material.alpha_11) +
+                   " alpha12=" + std::to_string(config.material.alpha_12) + " alpha111=" + std::to_string(config.material.alpha_111) +
+                   " alpha112=" + std::to_string(config.material.alpha_112) + " alpha1111=" + std::to_string(config.material.alpha_1111) +
+                   " alpha1112=" + std::to_string(config.material.alpha_1112) + " alpha1122=" + std::to_string(config.material.alpha_1122) +
+                   " | b1=" + std::to_string(config.material.b1) + " b2=" + std::to_string(config.material.b2) +
+                   " b3=" + std::to_string(config.material.b3) +
+                   " | c1=" + std::to_string(config.material.c1) + " c2=" + std::to_string(config.material.c2) +
+                   " c3=" + std::to_string(config.material.c3), config.simulation.debug_enabled);
     Logger::info("Starting simulation...");
     std::string initial_time = chrono.get_datetime_string();
     
@@ -140,15 +152,11 @@ void Simulation::run() {
             
             // 3. Analyse du résultat
             if (iters > 0 && iters <= MAX_ITERS) {
-                // SUCCÈS
                 step_accepted = true;
                 time += dt;
                 step++;
                 
                 update_physics_history();
-
-                // Accélération si convergence rapide
-                if (iters <= 4) dt = std::min(dt * 1.2, dt_max);
 
             } else {
                 // ÉCHEC : Rollback et réduction du pas de temps

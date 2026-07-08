@@ -1,7 +1,7 @@
 #pragma once
 #include <iostream>
 #include <string>
-#include "IO/Datafile.h"
+#include "../../tests/Datafile.hpp" // Inclure le fichier Datafile.hpp pour accéder à la configuration
 
 class Logger {
 public:

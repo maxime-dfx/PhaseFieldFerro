@@ -83,7 +83,7 @@ void MechanicsAssembler::apply_boundary_conditions(Eigen::SparseMatrix<double>& 
         max_diag = 1.0; // On force une valeur pour que la pénalité fonctionne quand meme !
     }
 
-    const double penalty = max_diag * 1e7;
+    const double penalty = max_diag * 1e4;
     int forced_x = 0, forced_y = 0;
 
     for (size_t i = 0; i < bcs_x.size(); ++i) {

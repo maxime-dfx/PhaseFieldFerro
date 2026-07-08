@@ -3,10 +3,10 @@
 # ==============================================================================
 [output]
 OutputDir = "../output"
-MeshCreateFile = "maillage/maillage_gmsh"
+MeshCreateFile = "../input/rectangle.msh"
 
 [debug]
-enabled = false    # <-- ACTIVE pour voir les logs de convergence (m, err_p, err_v)
+enabled = false   # <-- ACTIVE pour voir les logs de convergence (m, err_p, err_v)
                   #     et les messages "Non-convergence au temps ..."
 
 [chrono]

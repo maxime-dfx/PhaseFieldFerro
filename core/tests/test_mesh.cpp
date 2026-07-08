@@ -1,9 +1,3 @@
-#include "Core/Mesh.h"
-#include "Core/Quadrature.h"
-#include "Core/ShapeFunctions.h"
-#include "Utils/Logger.h"
-#include "IO/Datafile.h"
-
 int main() {
     // // 1. Créer un maillage 10x10 (domaine [0,1]x[0,1])
     // Mesh mesh(Datafile("config.txt"));
