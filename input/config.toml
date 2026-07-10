@@ -6,7 +6,7 @@ OutputDir = "../output"
 MeshCreateFile = "../input/rectangle.msh"
 
 [debug]
-enabled = false   # <-- ACTIVE pour voir les logs de convergence (m, err_p, err_v)
+enabled = true   # <-- ACTIVE pour voir les logs de convergence (m, err_p, err_v)
                   #     et les messages "Non-convergence au temps ..."
 
 [chrono]
@@ -34,11 +34,12 @@ tolerance_vfield = 1e-3
 
 [mesh]
 calcul_mesh = true
+mesh_file = "../input/rectangle.msh"
 L_x = 200.0
 L_y = 200.0
 n_x = 200                     # non utilise si mesh_source = "gmsh", garde pour compatibilite
 n_y = 200
-element_type = "TRIANGLE"
+element_type = "QUAD"
 mesh_source = "gmsh"          # <-- a adapter selon comment tu as branche le choix
                               #     structure/gmsh dans ton main.cpp
 gmsh_file = "rectangle.msh"   # chemin vers le maillage genere par Gmsh

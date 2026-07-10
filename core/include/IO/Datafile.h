@@ -38,6 +38,7 @@ struct SimulationConfig {
 
 struct MeshConfig {
     bool calcul_mesh;
+    std::string get_mesh_file;
     double Lx, Ly;
     int nx, ny;
     double dx, dy;

@@ -1,107 +1,138 @@
 #include "Physics/MechanicsAssembler.h"
 #include "Core/ElementIntegrator.h"
-#include <cmath>
+#include <omp.h>
 
 void MechanicsAssembler::assemble_system(
     const Mesh& mesh, const Polarization& polarization, const Fracture& fracture, 
-    const Math& math, Eigen::SparseMatrix<double>& K_global, Eigen::VectorXd& F_global) 
+    const Math& math, const std::vector<NodeBC>& bcs_x, const std::vector<NodeBC>& bcs_y,
+    Eigen::SparseMatrix<double>& K_global, Eigen::VectorXd& F_global) 
 {
     const auto& elements = mesh.get_elements();
+    const int n_dof = static_cast<int>(mesh.get_num_nodes());
+    const int system_size = 2 * n_dof;
+
     Eigen::Matrix3d C = math.get_elastic_matrix(); 
-    std::vector<Eigen::Triplet<double>> triplets;
-    triplets.reserve(elements.size() * 64);
 
-    const int MAX_NODES = 4;
-    Eigen::MatrixXd K_local(2 * MAX_NODES, 2 * MAX_NODES);
-    Eigen::VectorXd F_local(2 * MAX_NODES);
-    Eigen::VectorXd Px_local(MAX_NODES), Py_local(MAX_NODES), v_local(MAX_NODES);
-    
-    Eigen::RowVectorXd N(MAX_NODES);
-    Eigen::MatrixXd grad_N(2, MAX_NODES);
-    Eigen::MatrixXd B(3, 2 * MAX_NODES);
+    int num_threads = omp_get_max_threads();
+    std::vector<std::vector<Eigen::Triplet<double>>> thread_triplets(num_threads);
+    std::vector<Eigen::VectorXd> thread_F(num_threads, Eigen::VectorXd::Zero(system_size));
+    std::vector<Eigen::VectorXd> thread_diag(num_threads, Eigen::VectorXd::Zero(system_size));
 
-    for (size_t elem_idx = 0; elem_idx < elements.size(); ++elem_idx) {
-        const auto& elem = elements[elem_idx];
-        int n_nodes = elem.get_num_nodes();
-        auto coords = mesh.get_element_coords(elem_idx);
-        const auto& indices = elem.get_node_indices();
+    for (int t = 0; t < num_threads; ++t) {
+        thread_triplets[t].reserve((elements.size() * 64) / num_threads + 64);
+    }
 
-        K_local.topLeftCorner(2 * n_nodes, 2 * n_nodes).setZero();
-        F_local.head(2 * n_nodes).setZero();
-        
-        for (int i = 0; i < n_nodes; ++i) {
-            Px_local(i) = polarization.get_Px()[indices[i]];
-            Py_local(i) = polarization.get_Py()[indices[i]];
-            v_local(i)  = fracture.get_v()[indices[i]];
-        }
+    #pragma omp parallel
+    {
+        int tid = omp_get_thread_num();
+        constexpr int MAX_NODES = 4;
+        constexpr int MAX_ELEMENT_DOF = 2 * MAX_NODES;
+        Eigen::Matrix<double, MAX_ELEMENT_DOF, MAX_ELEMENT_DOF> K_local;
+        Eigen::Matrix<double, MAX_ELEMENT_DOF, 1> F_local;
+        Eigen::Matrix<double, MAX_NODES, 1> Px_local, Py_local, v_local;
+        Eigen::Matrix<double, 3, MAX_ELEMENT_DOF> B;
 
-        ElementIntegrator::integrate(elem, coords, N, grad_N, [&](int n, double dV, const GaussPoint2D& gp) {
-            B.leftCols(2 * n).setZero();
-            for (int i = 0; i < n; ++i) {
-                B(0, 2 * i)     = grad_N(0, i); 
-                B(1, 2 * i + 1) = grad_N(1, i); 
-                B(2, 2 * i)     = grad_N(1, i); 
-                B(2, 2 * i + 1) = grad_N(0, i); 
-            }
+        // Allocation dynamique UNIQUE par thread pour satisfaire le template
+        Eigen::RowVectorXd N(MAX_NODES);
+        Eigen::MatrixXd grad_N(2, MAX_NODES);
 
-            Eigen::Vector2d Pi_gp(N.head(n).dot(Px_local.head(n)), N.head(n).dot(Py_local.head(n)));
-            double v_gp = N.head(n).dot(v_local.head(n));
+        #pragma omp for schedule(static)
+        for (size_t elem_idx = 0; elem_idx < elements.size(); ++elem_idx) {
+            const auto& elem = elements[elem_idx];
+            const int n_nodes = elem.get_num_nodes();
+            auto coords = mesh.get_element_coords(elem_idx);
+            const auto& indices = elem.get_node_indices();
+            const int n_local_dof = 2 * n_nodes;
 
-            if (!std::isfinite(Pi_gp(0)) || !std::isfinite(Pi_gp(1)) || !std::isfinite(v_gp)) return;
-
-            double penalite_fracture = (v_gp * v_gp) + math.eta_k;
-            Eigen::Vector3d sigma_0 = math.compute_sigma_0(Pi_gp);
-            auto B_active = B.leftCols(2 * n);
+            K_local.setZero();
+            F_local.setZero();
             
-            K_local.topLeftCorner(2 * n, 2 * n).noalias() += B_active.transpose() * (penalite_fracture * C) * B_active * dV;
-            F_local.head(2 * n).noalias() -= B_active.transpose() * (penalite_fracture * sigma_0) * dV;
-        });
-
-        for (int i = 0; i < n_nodes; ++i) {
-            for (int j = 0; j < n_nodes; ++j) {
-                triplets.emplace_back(2 * indices[i],     2 * indices[j],     K_local(2 * i,     2 * j));
-                triplets.emplace_back(2 * indices[i],     2 * indices[j] + 1, K_local(2 * i,     2 * j + 1));
-                triplets.emplace_back(2 * indices[i] + 1, 2 * indices[j],     K_local(2 * i + 1, 2 * j));
-                triplets.emplace_back(2 * indices[i] + 1, 2 * indices[j] + 1, K_local(2 * i + 1, 2 * j + 1));
+            for (int i = 0; i < n_nodes; ++i) {
+                Px_local(i) = polarization.get_Px()[indices[i]];
+                Py_local(i) = polarization.get_Py()[indices[i]];
+                v_local(i)  = fracture.get_v()[indices[i]];
             }
-            F_global(2 * indices[i])     += F_local(2 * i);
-            F_global(2 * indices[i] + 1) += F_local(2 * i + 1);
+
+            ElementIntegrator::integrate(elem, coords, N, grad_N, [&](int n, double dV, const GaussPoint2D& gp) {
+                (void)gp;
+                B.setZero();
+                for (int i = 0; i < n; ++i) {
+                    B(0, 2 * i)     = grad_N(0, i); 
+                    B(1, 2 * i + 1) = grad_N(1, i); 
+                    B(2, 2 * i)     = grad_N(1, i); 
+                    B(2, 2 * i + 1) = grad_N(0, i); 
+                }
+
+                Eigen::Vector2d Pi_gp(N.head(n).dot(Px_local.head(n)), N.head(n).dot(Py_local.head(n)));
+                double v_gp = N.head(n).dot(v_local.head(n));
+
+                if (!std::isfinite(Pi_gp(0)) || !std::isfinite(Pi_gp(1)) || !std::isfinite(v_gp)) return;
+
+                double penalite_fracture = (v_gp * v_gp) + math.eta_k;
+                Eigen::Vector3d sigma_0 = math.compute_sigma_0(Pi_gp);
+                
+                auto B_active = B.leftCols(2 * n);
+                double factor = penalite_fracture * dV;
+                K_local.topLeftCorner(n_local_dof, n_local_dof).noalias() += (B_active.transpose() * C * B_active) * factor;
+                F_local.head(n_local_dof).noalias()                       -= B_active.transpose() * sigma_0 * factor;
+            });
+
+            for (int i = 0; i < n_nodes; ++i) {
+                int g_i_x = 2 * indices[i], g_i_y = 2 * indices[i] + 1;
+                int l_i_x = 2 * i, l_i_y = 2 * i + 1;
+
+                for (int j = 0; j < n_nodes; ++j) {
+                    int g_j_x = 2 * indices[j], g_j_y = 2 * indices[j] + 1;
+                    int l_j_x = 2 * j, l_j_y = 2 * j + 1;
+
+                    thread_triplets[tid].emplace_back(g_i_x, g_j_x, K_local(l_i_x, l_j_x));
+                    thread_triplets[tid].emplace_back(g_i_x, g_j_y, K_local(l_i_x, l_j_y));
+                    thread_triplets[tid].emplace_back(g_i_y, g_j_x, K_local(l_i_y, l_j_x));
+                    thread_triplets[tid].emplace_back(g_i_y, g_j_y, K_local(l_i_y, l_j_y));
+                }
+                
+                thread_F[tid](g_i_x) += F_local(l_i_x);
+                thread_F[tid](g_i_y) += F_local(l_i_y);
+                thread_diag[tid](g_i_x) += K_local(l_i_x, l_i_x);
+                thread_diag[tid](g_i_y) += K_local(l_i_y, l_i_y);
+            }
         }
     }
-    K_global.setFromTriplets(triplets.begin(), triplets.end());
-}
 
-void MechanicsAssembler::apply_boundary_conditions(Eigen::SparseMatrix<double>& K, Eigen::VectorXd& F, 
-                                                   const std::vector<NodeBC>& bcs_x, const std::vector<NodeBC>& bcs_y) {
-    
-    double max_diag = K.diagonal().cwiseAbs().maxCoeff();
+    size_t total_triplets = 0;
+    for (int t = 0; t < num_threads; ++t) total_triplets += thread_triplets[t].size();
+    total_triplets += bcs_x.size() + bcs_y.size();
 
-    // --- LE BOUCLIER ANTI-ZERO ---
-    if (max_diag < 1e-12) {
-        // std::cout << "\n[ALERTE ROUGE] La matrice de rigidite K est VIDE (max_diag = 0) !\n";
-        // std::cout << "-> L'assemblage n'a rien calcule (Integrateur inactif ou Matrice C nulle).\n";
-        max_diag = 1.0; // On force une valeur pour que la pénalité fonctionne quand meme !
+    std::vector<Eigen::Triplet<double>> global_triplets;
+    global_triplets.reserve(total_triplets);
+
+    F_global.setZero(system_size);
+    Eigen::VectorXd diag_global = Eigen::VectorXd::Zero(system_size);
+
+    for (int t = 0; t < num_threads; ++t) {
+        global_triplets.insert(global_triplets.end(), thread_triplets[t].begin(), thread_triplets[t].end());
+        F_global += thread_F[t];
+        diag_global += thread_diag[t];
     }
 
+    double max_diag = diag_global.cwiseAbs().maxCoeff();
+    if (max_diag < 1e-12) max_diag = 1.0;
     const double penalty = max_diag * 1e4;
-    int forced_x = 0, forced_y = 0;
 
     for (size_t i = 0; i < bcs_x.size(); ++i) {
         if (bcs_x[i].type == BCType::DIRICHLET) {
             int dof = 2 * static_cast<int>(i);
-            K.coeffRef(dof, dof) += penalty;
-            F(dof) += penalty * bcs_x[i].value;
-            forced_x++;
+            global_triplets.emplace_back(dof, dof, penalty);
+            F_global(dof) += penalty * bcs_x[i].value;
         }
     }
     for (size_t i = 0; i < bcs_y.size(); ++i) {
         if (bcs_y[i].type == BCType::DIRICHLET) {
             int dof = 2 * static_cast<int>(i) + 1;
-            K.coeffRef(dof, dof) += penalty;
-            F(dof) += penalty * bcs_y[i].value;
-            forced_y++;
+            global_triplets.emplace_back(dof, dof, penalty);
+            F_global(dof) += penalty * bcs_y[i].value;
         }
     }
 
-    K.makeCompressed();
+    K_global.setFromTriplets(global_triplets.begin(), global_triplets.end());
 }

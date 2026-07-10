@@ -44,9 +44,9 @@ double Math::W_energy(const Eigen::Vector2d& Pi, const Eigen::Matrix2d& epsjk) c
     return -0.5 * b1 *(epsjk(0,0)*p1_2 + epsjk(1,1)*p2_2)
            -0.5 * b2 *(epsjk(0,0)*p2_2 + epsjk(1,1)*p1_2)
            - b3 * (epsjk(1,0) + epsjk(0,1)) * p1 * p2
-           + c1 * (epsjk(0,0)*epsjk(0,0) + epsjk(1,1)*epsjk(1,1))
+           + 0.5 * c1 * (epsjk(0,0)*epsjk(0,0) + epsjk(1,1)*epsjk(1,1))
            + c2 * (epsjk(0,0)*epsjk(1,1))
-           + c3 * (epsjk(0,1)*epsjk(0,1) + epsjk(1,0)*epsjk(1,0));
+           + 0.5 * c3 * (epsjk(0,1)*epsjk(0,1) + epsjk(1,0)*epsjk(1,0));
 }
 
 double Math::dW_dp1(const Eigen::Vector2d& Pi, const Eigen::Matrix2d& epsjk) const {
@@ -144,15 +144,41 @@ double Math::compute_H_drive(const Eigen::Matrix2d& Pij, const Eigen::Vector2d& 
     return H_drive;
 }
 
-double Math::compute_polarization_force(int component, const Eigen::Vector2d& Pi, 
-                                       const Eigen::Matrix2d& eps, double E_gp, 
-                                       double penalite_fracture, bool is_impermeable) const {
-    double dW   = (component == 0) ? dW_dp1(Pi, eps) : dW_dp2(Pi, eps);
-    double dchi = (component == 0) ? dchi_dp1(Pi)   : dchi_dp2(Pi);
+double Math::compute_polarization_force(int component, const Eigen::Vector2d& Pi, const Eigen::Matrix2d& eps, 
+                                        double E_component, double penalite_fracture, bool is_impermeable) const 
+{
+    double p1 = Pi(0); double p2 = Pi(1);
+    double p1_2 = p1*p1; double p1_4 = p1_2*p1_2; double p1_6 = p1_4*p1_2;
+    double p2_2 = p2*p2; double p2_4 = p2_2*p2_2; double p2_6 = p2_4*p2_2;
 
-    if (!is_impermeable) {
-        return - (penalite_fracture * dW + dchi - E_gp);
+    // Dérivée de l'énergie de séparation de phase \chi (Eq. 5) - Identique pour les deux cas
+    double dchi_dpi = 0.0;
+    if (component == 0) {
+        dchi_dpi = 2.0*alpha1*p1 + 4.0*alpha11*p1*p1_2 + 2.0*alpha12*p1*p2_2 
+                 + 6.0*alpha111*p1*p1_4 + 2.0*alpha112*p1*p2_4 + 4.0*alpha112*p1*p1_2*p2_2 
+                 + 8.0*alpha1111*p1*p1_6 + 2.0*alpha1112*p1*p2_6 + 6.0*alpha1112*p1*p1_4*p2_2 
+                 + 4.0*alpha1122*p1*p1_2*p2_4;
     } else {
-        return - (penalite_fracture * (dW - E_gp) + dchi);
+        dchi_dpi = 2.0*alpha1*p2 + 4.0*alpha11*p2*p2_2 + 2.0*alpha12*p2*p1_2 
+                 + 6.0*alpha111*p2*p2_4 + 2.0*alpha112*p2*p1_4 + 4.0*alpha112*p2*p2_2*p1_2 
+                 + 8.0*alpha1111*p2*p2_6 + 2.0*alpha1112*p2*p1_6 + 6.0*alpha1112*p2*p2_4*p1_2 
+                 + 4.0*alpha1122*p2*p2_2*p1_4;
+    }
+
+    // Dérivée de l'énergie électroélastique W (Eq. 4)
+    double dW_dpi = 0.0;
+    if (component == 0) {
+        dW_dpi = -b1*eps(0,0)*p1 - b2*eps(1,1)*p1 - b3*(eps(1,0) + eps(0,1))*p2;
+    } else {
+        dW_dpi = -b1*eps(1,1)*p2 - b2*eps(0,0)*p2 - b3*(eps(1,0) + eps(0,1))*p1;
+    }
+
+    // Assemblage strict selon la thermodynamique du papier (Eq. 11 vs Eq. 13)
+    if (is_impermeable) {
+        // Le champ électrique E est DANS le crochet atténué par (v^2 + eta)
+        return penalite_fracture * (dW_dpi - E_component) + dchi_dpi;
+    } else {
+        // Le champ électrique E est HORS du crochet
+        return penalite_fracture * dW_dpi + dchi_dpi - E_component;
     }
 }

@@ -1,0 +1,67 @@
+# ==============================================================================
+# Fichier de Configuration TOML pour PhaseFieldFerro - MODE DEBUG / DIAGNOSTIC
+# ==============================================================================
+[output]
+OutputDir = "../output"
+MeshCreateFile = "../input/rectangle.msh"
+
+[physics]
+enable_polarization = true
+enable_mecanics = false        # Attention : orthographe sans 'h' comme dans Datafile.h
+enable_electrostatics = false
+enable_fracture = false
+
+[simulation]
+total_time = 10.0
+dt = 0.001
+dt_relax = 0.1
+save_frequency = 1            # <-- garde a 1 pour avoir un VTK a CHAQUE step accepte,
+                              #     indispensable pour retrouver l'instant exact du blow-up
+tolerance_ferro = 1e-7
+tolerance_vfield = 1e-3
+
+[mesh]
+calcul_mesh = true
+L_x = 1.0
+L_y = 1.0
+n_x = 1                     # non utilise si mesh_source = "gmsh", garde pour compatibilite
+n_y = 1
+element_type = "QUAD"
+mesh_source = "gmsh"          # <-- a adapter selon comment tu as branche le choix
+                              #     structure/gmsh dans ton main.cpp
+gmsh_file = "rectangle.msh"   # chemin vers le maillage genere par Gmsh
+
+[polarization]
+initial_polarization = "RANDOM"
+Px_0 = 1.0
+Py_0 = 0.0
+
+# ==============================================================================
+# PARAMÈTRES MATÉRIAU - identiques a la Table 1 du papier (Abdollahi & Arias, 2011)
+# ==============================================================================
+[material]
+alpha_1    = -0.0023
+alpha_11   = -0.0029
+alpha_12   = -0.0011
+alpha_111  = 0.003
+alpha_112  = -0.00068
+alpha_1111 = 0.001
+alpha_1112 = 0.0093
+alpha_1122 = 1.24
+b1 = 1.4282
+b2 = -0.185
+b3 = 0.8066
+c1 = 185.0
+c2 = 111.0
+c3 = 74.0
+eps0 = 0.131
+t    = 300.0
+P0   = 1.0
+c0   = 1.0
+xi   = 1.0
+a0    = 0.1
+Gc    = 4.0
+kappa = 2.0
+mu_p  = 1.0
+mu_v  = 15 
+eta_k = 1e-6

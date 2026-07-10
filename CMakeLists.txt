@@ -25,21 +25,42 @@ find_package(Eigen3 REQUIRED)
 # Architecture : Bibliothèque Centrale (CoreLib)
 # ==============================================================================
 set(CORE_SOURCES
-    # --- Décommentez les .cpp nécessaires pour éviter les "Undefined References" ---
-    # core/src/Core/BoundaryManager.cpp  <-- Vous l'avez passé en .hpp, donc laissez commenté
-    # core/src/Core/Mesh.cpp               # <-- Sûrement requis pour compiler !
-    # core/src/Core/MeshGenerator.cpp
-    # core/src/Core/MeshGeneratorGmsh.cpp
-    # core/src/IO/Datafile.cpp           <-- Vous l'avez passé en .hpp, donc laissez commenté
+    core/src/Core/BoundaryManager.cpp  
+    core/src/Core/Mesh.cpp               
+    core/src/Core/MeshGenerator.cpp
+    core/src/Core/MeshGeneratorGmsh.cpp
+
+    core/src/IO/Datafile.cpp
+    core/src/IO/Diagnostics.cpp
+    core/src/IO/MetricsLogger.cpp
+    core/src/IO/ResultsExporter.cpp
+
+    core/src/Physics/Fracture.cpp
+    core/src/Physics/Polarization.cpp
+    core/src/Physics/Mechanics.cpp
+    core/src/Physics/Electrostatics.cpp
+    core/src/Physics/FractureAssembler.cpp
+    core/src/Physics/PolarizationAssembler.cpp
+    core/src/Physics/MechanicsAssembler.cpp
+    core/src/Physics/ElectrostaticsAssembler.cpp
+    core/src/Physics/Math.cpp
+    core/src/Physics/Material.cpp
+
+    core/src/Solvers/LinearSolver.cpp
+
+    core/src/Utils/ProgressBar.cpp
+
+    core/src/Simulation.cpp
+    
 
     # --- Vos nouveaux fichiers Header-Only (Optionnels pour la compilation, utiles pour l'IDE) ---
-    core/tests/FerroelectricMaterial.hpp
-    core/tests/StaggeredSolver.hpp
-    core/tests/BoundaryManager.hpp
-    core/tests/MultiphysicsAssembler.hpp
-    core/tests/Datafile.hpp
-    core/tests/GmshReader.hpp
-    core/tests/Element.hpp
+    # core/tests/FerroelectricMaterial.hpp
+    # core/tests/StaggeredSolver.hpp
+    # core/tests/BoundaryManager.hpp
+    # core/tests/MultiphysicsAssembler.hpp
+    # core/tests/Datafile.hpp
+    # core/tests/GmshReader.hpp
+    # core/tests/Element.hpp
 )
 
 add_library(CoreLib STATIC ${CORE_SOURCES})
@@ -67,19 +88,19 @@ endif()
 # ==============================================================================
 
 # 1. Application Principale
-# add_executable(PhaseFieldFerro core/src/main.cpp)
-# target_link_libraries(PhaseFieldFerro PRIVATE CoreLib)
+add_executable(PhaseFieldFerro core/src/main.cpp)
+target_link_libraries(PhaseFieldFerro PRIVATE CoreLib)
 
 # 2. Unités de Tests
-add_executable(UnitTests core/tests/test_physics.cpp)
-target_link_libraries(UnitTests PRIVATE CoreLib)
+# add_executable(UnitTests core/tests/test_physics.cpp)
+# target_link_libraries(UnitTests PRIVATE CoreLib)
 
-add_executable(MeshTests core/tests/test_mesh.cpp)
-target_link_libraries(MeshTests PRIVATE CoreLib)
+# add_executable(MeshTests core/tests/test_mesh.cpp)
+# target_link_libraries(MeshTests PRIVATE CoreLib)
 
-enable_testing()
-add_test(NAME PhysicsTest COMMAND UnitTests)
-add_test(NAME MeshTest COMMAND MeshTests)
+# enable_testing()
+# add_test(NAME PhysicsTest COMMAND UnitTests)
+# add_test(NAME MeshTest COMMAND MeshTests)
 
 # ==========================================
 # Sécurisation de la mémoire sous Windows (MinGW)

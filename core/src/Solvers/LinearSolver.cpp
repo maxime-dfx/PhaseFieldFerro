@@ -5,7 +5,7 @@ Eigen::VectorXd LinearSolver::solve_with_guess(Eigen::SparseMatrix<double>& A, c
     // 1. Configuration du Solveur Itératif (Gradient Conjugué + Incomplete Cholesky)
     Eigen::ConjugateGradient<Eigen::SparseMatrix<double>, Eigen::Lower|Eigen::Upper, Eigen::IncompleteCholesky<double>> solver;
     solver.setTolerance(1e-10); 
-    solver.setMaxIterations(1000);
+    solver.setMaxIterations(300);
     solver.compute(A);
 
     // 2. Résolution avec Démarrage à chaud

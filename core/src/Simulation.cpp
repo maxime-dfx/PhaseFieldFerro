@@ -10,7 +10,7 @@ Simulation::Simulation(const Datafile& config_in, const Mesh& mesh_in, ResultsEx
       mesh(mesh_in),
       exporter(exporter_in),
       boundary_manager(mesh_in, config_in),
-      math(config_in), // Math prend désormais la config refactorisée
+      math(config_in), 
       diagnostics(config_in, mesh_in),
       chrono(),
       mechanics(config_in, mesh_in, boundary_manager),
@@ -46,7 +46,7 @@ void Simulation::initialize_physics() {
 }
 
 // =========================================================================
-// RÉSOLUTION NON-LINÉAIRE (BOUCLE DE PICARD)
+// RÉSOLUTION NON-LINÉAIRE (BOUCLE DE PICARD) - Algorithm 1 (Abdollahi & Arias)
 // =========================================================================
 int Simulation::compute_one_step_physics(double time, double dt) {
     boundary_manager.update_time(time);
@@ -57,35 +57,38 @@ int Simulation::compute_one_step_physics(double time, double dt) {
     if (config.physics_toggle.electrostatics) electrostatics.save_previous_iteration();
     if (config.physics_toggle.fracture) fracture.save_previous_iteration();
 
-    // 2. Fige les variables temporelles explicites
-    if (config.physics_toggle.polarization) polarization.freeze_time_step();
-    if (config.physics_toggle.fracture) fracture.freeze_time_step();
-
     int m = 0;
     double err_p = 1.0, err_v = 1.0;
     const double tol_ferro = config.simulation.tol_ferro;  
     const double tol_vfield = config.simulation.tol_vfield; 
     const int MAX_ITER = 50;
 
-    // 3. Boucle Repeat-Until (Algorithme couplé itératif)
+    // 2. Boucle Repeat-Until (Algorithme couplé itératif staggered)
     do {
         m++;
 
+        // Ligne 6 de l'Algorithme 1 : P_m utilise P_m-1, Phi_m-1, V_m-1
         if (config.physics_toggle.polarization) { 
-            polarization.update_Px(time, fracture, mechanics, electrostatics, math);
-            polarization.update_Py(time, fracture, mechanics, electrostatics, math);
+            // Appel au nouveau solveur monolithique
+            polarization.update_P(time, fracture, mechanics, electrostatics, math); // CORRIGÉ
         }
+        
+        // Ligne 7 de l'Algorithme 1 : u_m utilise P_m et V_m-1
         if (config.physics_toggle.mechanics) {
             mechanics.update_u(time, polarization, fracture, math);
         }
+        
+        // Ligne 8 de l'Algorithme 1 : Phi_m utilise P_m et V_m-1
         if (config.physics_toggle.electrostatics) {
-            electrostatics.update_electric_potential(time, polarization, fracture, math);
+            electrostatics.update_phi(time, polarization, fracture, math); // CORRIGÉ
         }
+        
+        // Ligne 9 de l'Algorithme 1 : V_m utilise P_m, u_m, Phi_m et V_m-1
         if (config.physics_toggle.fracture) {
             fracture.update_v(dt, polarization, mechanics, electrostatics, math);
         }
 
-        // 4. Vérification de la convergence
+        // 3. Vérification de la convergence (Ligne 10)
         err_p = 0.0; err_v = 0.0;
         
         if (config.physics_toggle.polarization) {
@@ -115,19 +118,6 @@ int Simulation::compute_one_step_physics(double time, double dt) {
 // =========================================================================
 void Simulation::run() {
     if (config.chrono.run) chrono.start();
-    Logger::debug( "xi=" + std::to_string(config.material.xi) + " c0=" + std::to_string(config.material.c0) +
-                   " mu_p=" + std::to_string(config.material.mu_p) + " mu_v=" + std::to_string(config.material.mu_v) +
-                   " a0=" + std::to_string(config.material.a0) + " P0=" + std::to_string(config.material.P0) +
-                   " t=" + std::to_string(config.material.t) + " eta_k=" + std::to_string(config.material.eta_k) +
-                   " eps0=" + std::to_string(config.material.eps0) +
-                   " | alpha1=" + std::to_string(config.material.alpha_1) + " alpha11=" + std::to_string(config.material.alpha_11) +
-                   " alpha12=" + std::to_string(config.material.alpha_12) + " alpha111=" + std::to_string(config.material.alpha_111) +
-                   " alpha112=" + std::to_string(config.material.alpha_112) + " alpha1111=" + std::to_string(config.material.alpha_1111) +
-                   " alpha1112=" + std::to_string(config.material.alpha_1112) + " alpha1122=" + std::to_string(config.material.alpha_1122) +
-                   " | b1=" + std::to_string(config.material.b1) + " b2=" + std::to_string(config.material.b2) +
-                   " b3=" + std::to_string(config.material.b3) +
-                   " | c1=" + std::to_string(config.material.c1) + " c2=" + std::to_string(config.material.c2) +
-                   " c3=" + std::to_string(config.material.c3), config.simulation.debug_enabled);
     Logger::info("Starting simulation...");
     std::string initial_time = chrono.get_datetime_string();
     
@@ -156,10 +146,11 @@ void Simulation::run() {
                 time += dt;
                 step++;
                 
+                // On valide le pas de temps, les états "_current" deviennent les états "_n"
                 update_physics_history();
 
             } else {
-                // ÉCHEC : Rollback et réduction du pas de temps
+                // ÉCHEC : Rollback strict et réduction du pas de temps
                 Logger::warning("Non-convergence a t=" + std::to_string(time + dt) + ". Reduction de dt...");
                 
                 restore_previous_states();
@@ -196,18 +187,22 @@ void Simulation::save_previous_states() {
     if (config.physics_toggle.mechanics) mechanics.save_previous_state();
     if (config.physics_toggle.fracture) fracture.save_previous_state();
     if (config.physics_toggle.polarization) polarization.save_previous_state();
+    if (config.physics_toggle.electrostatics) electrostatics.save_previous_state(); // Ajout essentiel
 }
 
 void Simulation::restore_previous_states() {
     if (config.physics_toggle.mechanics) mechanics.restore_previous_state();
     if (config.physics_toggle.fracture) fracture.restore_previous_state();
     if (config.physics_toggle.polarization) polarization.restore_previous_state();
+    if (config.physics_toggle.electrostatics) electrostatics.restore_previous_state(); // Ajout essentiel
 }
 
 void Simulation::update_physics_history() {
+    // Cette fonction valide t_n, indispensable pour l'irréversibilité v_n (Algorithme 1, Ligne 11)
     if (config.physics_toggle.mechanics) mechanics.update_history();
     if (config.physics_toggle.fracture) fracture.update_history();
     if (config.physics_toggle.polarization) polarization.update_history();
+    if (config.physics_toggle.electrostatics) electrostatics.update_history(); // Ajout essentiel
 }
 
 void Simulation::extract_and_save_results(double time, int step, const std::string& initial_time_str) {

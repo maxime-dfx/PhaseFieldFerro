@@ -46,6 +46,7 @@ void Datafile::parse_simulation(const toml::table& config) {
 
 void Datafile::parse_mesh(const toml::table& config) {
     mesh.calcul_mesh = get_val<bool>(config, "mesh", "calcul_mesh", true);
+    mesh.get_mesh_file = get_val<std::string>(config, "mesh", "get_mesh_file", "../input/rectangle.msh");
     mesh.Lx = get_val<double>(config, "mesh", "L_x", 200.0);
     mesh.Ly = get_val<double>(config, "mesh", "L_y", 200.0);
     mesh.nx = get_val<int>(config, "mesh", "n_x", 200);

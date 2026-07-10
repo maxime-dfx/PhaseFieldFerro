@@ -2,7 +2,10 @@
 #include "Physics/MechanicsAssembler.h"
 #include "Solvers/LinearSolver.h"
 #include "Core/ShapeFunctions.h"
+#include "Core/ElementIntegrator.h"
+#include "Core/Types.h"
 #include "Utils/Logger.h"
+#include <omp.h>
 
 Mechanics::Mechanics(const Datafile& config, const Mesh& mesh, const BoundaryManager& bc_manager)
     : config(config), mesh(mesh), bc_manager(bc_manager) 
@@ -13,7 +16,6 @@ Mechanics::Mechanics(const Datafile& config, const Mesh& mesh, const BoundaryMan
     ux_current.setZero(n_nodes);
     uy_current.setZero(n_nodes);
 
-    // Utilisation de la nouvelle structure Datafile (Étape 1)
     if (config.mechanics.type == InitializationType::UNIFORM) {
         ux_current.setConstant(config.mechanics.val_x_0);
         uy_current.setConstant(config.mechanics.val_y_0);
@@ -26,73 +28,45 @@ Mechanics::Mechanics(const Datafile& config, const Mesh& mesh, const BoundaryMan
 }
 
 void Mechanics::update_u(double time, const Polarization& polarization, const Fracture& fracture, const Math& math) {
+    (void)time;
     size_t n_nodes = mesh.get_num_nodes();
     size_t system_size = 2 * n_nodes;
 
     Eigen::SparseMatrix<double> K_global(system_size, system_size);
     Eigen::VectorXd F_global = Eigen::VectorXd::Zero(system_size);
 
-    // 1. Délégation de l'assemblage
-    MechanicsAssembler::assemble_system(mesh, polarization, fracture, math, K_global, F_global);
+    MechanicsAssembler::assemble_system(mesh, polarization, fracture, math, bc_manager.get_ux_bcs(), bc_manager.get_uy_bcs(), K_global, F_global);
 
-    // 2. Délégation des conditions aux limites
-    MechanicsAssembler::apply_boundary_conditions(K_global, F_global, bc_manager.get_ux_bcs(), bc_manager.get_uy_bcs());
-
-    // 3. Préparation du guess (Démarrage à chaud)
     Eigen::VectorXd U_guess(system_size);
+    #pragma omp parallel for schedule(static)
     for (size_t i = 0; i < n_nodes; ++i) {
         U_guess(2 * i)     = ux_current(i);
         U_guess(2 * i + 1) = uy_current(i);
     }
 
-    // 4. Délégation de la résolution mathématique
     Eigen::VectorXd U_new = LinearSolver::solve_with_guess(K_global, F_global, U_guess, config.simulation.debug_enabled);
 
-    // 5. Mise à jour de l'état
     if (U_new.allFinite()) {
         map_global_vector_to_components(U_new);
-        
-        // LE LOG DE VERITE DE LA REPONSE MATHÉMATIQUE
-        // std::cout << "[VERITE MECANIQUE] Temps t=" << time 
-        //           << " | Max_Uy = " << uy_current.maxCoeff() 
-        //           << " | Min_Uy = " << uy_current.minCoeff() << "\n\n";
-                  
     } else {
         Logger::error("[Mechanics] Echec resolution ou solution non finie");
     }
 }
-    
-
 
 void Mechanics::map_global_vector_to_components(const Eigen::VectorXd& U_new) {
-    for (size_t i = 0; i < mesh.get_num_nodes(); ++i) {
+    size_t n_nodes = mesh.get_num_nodes();
+    #pragma omp parallel for schedule(static)
+    for (size_t i = 0; i < n_nodes; ++i) {
         ux_current(i) = U_new(2 * i);
         uy_current(i) = U_new(2 * i + 1);
     }
 }
 
-double Mechanics::calculate_error() const {
-    return (ux_current - ux_prev_iter).norm() + (uy_current - uy_prev_iter).norm();
-}
-
-void Mechanics::save_previous_iteration() {
-    ux_prev_iter = ux_current;
-    uy_prev_iter = uy_current;
-}
-
-void Mechanics::save_previous_state() {
-    ux_backup = ux_current;
-    uy_backup = uy_current;
-}
-
-void Mechanics::restore_previous_state() {
-    ux_current = ux_backup;
-    uy_current = uy_backup;
-}
-
-void Mechanics::update_history() {
-    // Rien pour le moment dans la version HEAD
-}
+double Mechanics::calculate_error() const { return (ux_current - ux_prev_iter).norm() + (uy_current - uy_prev_iter).norm(); }
+void Mechanics::save_previous_iteration() { ux_prev_iter = ux_current; uy_prev_iter = uy_current; }
+void Mechanics::save_previous_state() { ux_backup = ux_current; uy_backup = uy_current; }
+void Mechanics::restore_previous_state() { ux_current = ux_backup; uy_current = uy_backup; }
+void Mechanics::update_history() {}
 
 Eigen::Matrix2d Mechanics::get_strain_at_gp(const Element& elem, const GaussPoint2D& gp, const std::vector<std::array<double, 2>>& coords) const {
     const auto& indices = elem.get_node_indices();
