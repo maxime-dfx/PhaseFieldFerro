@@ -1,26 +1,35 @@
 #include "Solvers/LinearSolver.h"
-#include "Utils/Logger.h"
+#include <Eigen/SparseLU>
+#include <iostream>
 
-Eigen::VectorXd LinearSolver::solve_with_guess(Eigen::SparseMatrix<double>& A, const Eigen::VectorXd& b, const Eigen::VectorXd& guess, bool debug_enabled) {
-    // 1. Configuration du Solveur Itératif (Gradient Conjugué + Incomplete Cholesky)
-    Eigen::ConjugateGradient<Eigen::SparseMatrix<double>, Eigen::Lower|Eigen::Upper, Eigen::IncompleteCholesky<double>> solver;
-    solver.setTolerance(1e-10); 
-    solver.setMaxIterations(100);
-    solver.compute(A);
+Eigen::VectorXd LinearSolver::solve_with_guess(
+    Eigen::SparseMatrix<double>& A, 
+    const Eigen::VectorXd& b, 
+    const Eigen::VectorXd& guess, 
+    bool debug_enabled
+) {
+    // Compression de la matrice (obligatoire pour SparseLU)
+    A.makeCompressed();
 
-    // 2. Résolution avec Démarrage à chaud
-    Eigen::VectorXd x = solver.solveWithGuess(b, guess);
-
-    // 3. Fallback de sécurité (Si la matrice est trop mal conditionnée)
-    if (solver.info() != Eigen::Success) {
-        Logger::debug("[LinearSolver] CG a échoué (iters: " + std::to_string(solver.iterations()) + "). Bascule sur LDLT Direct.", debug_enabled);
-        
-        Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> direct_solver;
-        direct_solver.compute(A);
-        x = direct_solver.solve(b);
-    } else {
-        Logger::debug("[LinearSolver] CG converge en " + std::to_string(solver.iterations()) + " itérations.", debug_enabled);
-    }
+    Eigen::SparseLU<Eigen::SparseMatrix<double>> solver;
     
+    // Analyse de la structure (sparsity pattern) et factorisation numérique
+    solver.analyzePattern(A);
+    solver.factorize(A);
+
+    if (solver.info() != Eigen::Success) {
+        std::cerr << "[ERREUR] La factorisation SparseLU a échoué (matrice singulière ?)\n";
+        return guess; // Repli de sécurité
+    }
+
+    // Résolution directe (le "guess" initial n'est pas utilisé par les solveurs directs,
+    // mais il est conservé dans la signature pour compatibilité avec votre architecture)
+    Eigen::VectorXd x = solver.solve(b);
+
+    if (solver.info() != Eigen::Success) {
+        std::cerr << "[ERREUR] La résolution SparseLU a échoué.\n";
+        return guess;
+    }
+
     return x;
 }
