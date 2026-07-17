@@ -20,7 +20,7 @@ Mesh MeshGenerator::generate_structured_mesh(const MeshConfig& config) {
     }
 
     // 2. Génération des Éléments
-    if (config.element_type == ElementType::QUAD) {
+    if (config.element_type == ElementType::QUAD4) {
         for (int j = 0; j < config.ny - 1; ++j) {
             for (int i = 0; i < config.nx - 1; ++i) {
                 int n1 = j * config.nx + i;
@@ -38,7 +38,7 @@ Mesh MeshGenerator::generate_structured_mesh(const MeshConfig& config) {
                 elements.push_back(e);
             }
         }
-    } else if (config.element_type == ElementType::TRIANGLE) {
+    } else if (config.element_type == ElementType::TRIANGLE3) {
         for (int j = 0; j < config.ny - 1; ++j) {
             for (int i = 0; i < config.nx - 1; ++i) {
                 int n1 = j * config.nx + i;

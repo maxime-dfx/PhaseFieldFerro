@@ -39,14 +39,14 @@ void ResultsExporter::exportToMesh(const std::string& filename) {
     }
     out << "\n";
 
-    if (m_mesh.get_element_type() == ElementType::QUAD) {
+    if (m_mesh.get_element_type() == ElementType::QUAD4) {
         auto quads = m_mesh.get_elements();
         out << "Quadrilaterals\n" << quads.size() << "\n";
         for (const auto& q : quads) {
             out << q.node_indices[0] << " " << q.node_indices[1] << " " 
                 << q.node_indices[2] << " " << q.node_indices[3] << " " << q.ref_tag << "\n";
         }
-    } else if (m_mesh.get_element_type() == ElementType::TRIANGLE) {
+    } else if (m_mesh.get_element_type() == ElementType::TRIANGLE3) {
         auto tris = m_mesh.get_elements();
         out << "Triangles\n" << tris.size() << "\n";
         for (const auto& t : tris) {
@@ -90,7 +90,7 @@ void ResultsExporter::exportScalarVTK(const std::string& filename,
         out << node.x << " " << node.y << " " << node.z << "\n";
     }
 
-    if (m_mesh.get_element_type() == ElementType::TRIANGLE) {
+    if (m_mesh.get_element_type() == ElementType::TRIANGLE3) {
         auto elements = m_mesh.get_elements();
         out << "\nCELLS " << elements.size() << " " << (elements.size() * 4) << "\n";
         for (const auto& tri : elements) {
@@ -102,7 +102,7 @@ void ResultsExporter::exportScalarVTK(const std::string& filename,
             out << "5\n"; 
         }
     } 
-    else if (m_mesh.get_element_type() == ElementType::QUAD) {
+    else if (m_mesh.get_element_type() == ElementType::QUAD4) {
         auto elements = m_mesh.get_elements();
         out << "\nCELLS " << elements.size() << " " << (elements.size() * 5) << "\n";
         for (const auto& quad : elements) {
@@ -170,7 +170,7 @@ void ResultsExporter::exportVectorVTK(const std::string& filename,
         out << node.x << " " << node.y << " " << node.z << "\n";
     }
 
-    if (m_mesh.get_element_type() == ElementType::TRIANGLE) {
+    if (m_mesh.get_element_type() == ElementType::TRIANGLE3) {
         auto elements = m_mesh.get_elements();
         out << "\nCELLS " << elements.size() << " " << (elements.size() * 4) << "\n";
         for (const auto& tri : elements) {
@@ -182,7 +182,7 @@ void ResultsExporter::exportVectorVTK(const std::string& filename,
             out << "5\n"; 
         }
     } 
-    else if (m_mesh.get_element_type() == ElementType::QUAD) {
+    else if (m_mesh.get_element_type() == ElementType::QUAD4) {
         auto elements = m_mesh.get_elements();
         out << "\nCELLS " << elements.size() << " " << (elements.size() * 5) << "\n";
         for (const auto& quad : elements) {
@@ -284,7 +284,7 @@ void ResultsExporter::exportMultiPhysicsVTK(const std::string& filename,
     // 2. CONNECTIVITÉ (CELLS & CELL_TYPES) EN BINAIRE
     // =========================================================
     
-    if (m_mesh.get_element_type() == ElementType::TRIANGLE) {
+    if (m_mesh.get_element_type() == ElementType::TRIANGLE3) {
         auto elements = m_mesh.get_elements();
         out << "CELLS " << elements.size() << " " << (elements.size() * 4) << "\n";
         
@@ -307,7 +307,7 @@ void ResultsExporter::exportMultiPhysicsVTK(const std::string& filename,
         }
         out << "\n";
     } 
-    else if (m_mesh.get_element_type() == ElementType::QUAD) {
+    else if (m_mesh.get_element_type() == ElementType::QUAD4) {
         auto elements = m_mesh.get_elements();
         out << "CELLS " << elements.size() << " " << (elements.size() * 5) << "\n";
         

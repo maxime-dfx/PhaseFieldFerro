@@ -59,7 +59,7 @@ void Datafile::parse_mesh(const toml::table& config) {
     mesh.dy = mesh.Ly / (mesh.ny - 1);
     
     std::string type = get_val<std::string>(config, "mesh", "element_type", "QUAD");
-    mesh.element_type = (type == "TRIANGLE") ? ElementType::TRIANGLE : ElementType::QUAD;
+    mesh.element_type = (type == "TRIANGLE") ? ElementType::TRIANGLE3 : ElementType::QUAD4;
 }
 
 void Datafile::parse_chrono(const toml::table& config) {

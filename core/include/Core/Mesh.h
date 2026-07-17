@@ -24,8 +24,14 @@ struct Element {
         return node_indices[i];
     }
 
-    // Itérateurs légers permettant de garder la compatibilité avec les boucles "for-range"
-    // Exemple dans l'assembleur : for(int node_id : elem) { ... }
+    std::vector<int> get_node_indices() const {
+        std::vector<int> indices(num_nodes);
+        for(int i = 0; i < num_nodes; ++i) {
+            indices[i] = node_indices[i];
+        }
+        return indices;
+    }
+
     const int* begin() const { return node_indices.data(); }
     const int* end() const { return node_indices.data() + num_nodes; }
 };

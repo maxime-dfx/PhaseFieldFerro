@@ -135,11 +135,13 @@ Mesh MeshGeneratorGmsh::load_from_msh(const std::string& msh_path, double Lx, do
         if (re.elm_type != 2) continue; 
 
         Element e;
-        e.node_indices.resize(3);
+        e.ref_tag = re.physical_tag; 
+        e.num_nodes = 3; 
+
         for (int k = 0; k < 3; ++k) {
             e.node_indices[k] = gmsh_id_to_local.at(re.node_ids[k]);
         }
-        e.ref_tag = 0;
+
         elements.push_back(e);
     }
 
@@ -148,5 +150,5 @@ Mesh MeshGeneratorGmsh::load_from_msh(const std::string& msh_path, double Lx, do
     }
 
     return Mesh(Lx, Ly, /*nx=*/0, /*ny=*/0,
-                ElementType::TRIANGLE, std::move(nodes), std::move(elements));
+                ElementType::TRIANGLE3, std::move(nodes), std::move(elements));
 }
