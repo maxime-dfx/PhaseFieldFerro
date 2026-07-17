@@ -22,10 +22,13 @@ private:
     Eigen::VectorXd Px_n, Py_n;
     Eigen::VectorXd Px_backup, Py_backup;
 
+    // --- Fonction d'initialisation isolée ---
+    void appliquer_conditions_initiales();
+
 public:
     Polarization(const Datafile& config, const Mesh& mesh, const BoundaryManager& bc_manager);
 
-    void update_P(double time, const Fracture& fracture, const Mechanics& mechanics, const Electrostatics& electrostatics, const Math& math);
+    void update_P(double time, double dt_relax,  const Fracture& fracture, const Mechanics& mechanics, const Electrostatics& electrostatics, const Math& math);
     void map_global_vector_to_components(const Eigen::VectorXd& P_new);
 
     double calculate_error() const;
@@ -36,6 +39,8 @@ public:
 
     const Eigen::VectorXd& get_Px() const { return Px_current; }
     const Eigen::VectorXd& get_Py() const { return Py_current; }
+    void set_Px(const Eigen::VectorXd& val) { Px_n = val; }
+    void set_Py(const Eigen::VectorXd& val) { Py_n = val; }
 };
 
 #endif // PHYSICS_POLARIZATION_H

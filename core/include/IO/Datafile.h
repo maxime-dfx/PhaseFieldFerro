@@ -16,7 +16,7 @@ struct BoundaryRuleConfig {
     double cx = 0.0, cy = 0.0, radius = 0.0;    
     double xmin = 0.0, xmax = 0.0, ymin = 0.0, ymax = 0.0;  
     double px = 0.0, py = 0.0, val = 0.0;       
-    double val_start = 0.0, val_end = 0.0, t_end = 1.0;
+    double val_start = 0.0, val_end = 0.0, t_start = 0.0, t_end = 1.0;
     double amplitude = 0.0, frequency = 0.0, offset = 0.0;
     double max_val = 0.0, y_center = 0.0, width = 0.0;
     double P0 = 0.0, x0 = 0.0, epsilon = 1e-3, k = 0.0, omega = 0.0;
@@ -30,6 +30,7 @@ struct SimulationConfig {
     std::string mesh_create_file;
     int total_time;
     double dt;
+    double dt_relax;
     int save_frequency;
     double tol_ferro;
     double tol_vfield;
@@ -66,12 +67,32 @@ struct MaterialConfig {
     double eta_k, Gc, kappa;
 };
 
+struct PrecrackConfig {
+    PrecrackShape shape = PrecrackShape::NONE;
+    double x0 = 0.0;
+    double y0 = 50.0;
+    double length = 5.0;
+    double half_width = 0.5;
+    double xmin = 0.0, xmax = 5.0, ymin = 48.0, ymax = 52.0;
+    bool smooth = true;
+    double smoothing_length = 1.0;
+    bool growth_enable = false;
+    double growth_length_start = 5.0;
+    double growth_length_end   = 5.0;
+    double growth_t_end        = 3.0;
+};
+
+struct FractureConfig {
+    CrackBCType mode = CrackBCType::PERMEABLE;
+    bool enable_precrack = false;
+    PrecrackConfig precrack;
+};
+
 // ------------------------------------------------------------
 //  CLASSE DATAFILE REFACTORISÉE
 // ------------------------------------------------------------
 class Datafile {
 public:
-    // Les sous-structures deviennent accessibles directement
     SimulationConfig simulation;
     MeshConfig mesh;
     ChronoConfig chrono;
@@ -79,22 +100,21 @@ public:
     PhysicsInitConfig polarization;
     PhysicsInitConfig mechanics;
     PhysicsInitConfig electrostatics;
-    CrackBCType fracture_mode;
+    FractureConfig fracture;          
     MaterialConfig material;
     std::vector<BoundaryRuleConfig> boundary_rules;
 
     Datafile(const std::string& filename);
 
 private:
-    // Méthodes privées pour ranger la logique de parsing
     void parse_simulation(const toml::table& config);
     void parse_mesh(const toml::table& config);
     void parse_chrono(const toml::table& config);
     void parse_physics(const toml::table& config);
     void parse_material(const toml::table& config);
+    void parse_fracture(const toml::table& config); 
     void parse_boundaries(const toml::table& config);
 
-    // Utilitaire interne
     template <typename T>
     T get_val(const toml::table& config, const std::string& section, const std::string& key, T default_value);
 };

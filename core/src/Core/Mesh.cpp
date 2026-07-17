@@ -38,3 +38,7 @@ std::vector<std::array<double, 2>> Mesh::get_element_coords(int elem_index) cons
     }
     return coords;
 }
+
+std::array<double, 2> Mesh::get_node_coords(size_t node_index) const {
+    return { m_nodes[node_index].x, m_nodes[node_index].y };
+}

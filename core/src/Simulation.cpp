@@ -55,37 +55,46 @@ int Simulation::compute_one_step_physics(double time, double dt) {
     if (config.physics_toggle.polarization) polarization.save_previous_iteration();
     if (config.physics_toggle.mechanics) mechanics.save_previous_iteration();
     if (config.physics_toggle.electrostatics) electrostatics.save_previous_iteration();
-    if (config.physics_toggle.fracture) fracture.save_previous_iteration();
+
+    fracture.update_precrack_geometry(time);
 
     int m = 0;
     double err_p = 1.0, err_v = 1.0;
     const double tol_ferro = config.simulation.tol_ferro;  
     const double tol_vfield = config.simulation.tol_vfield; 
     const int MAX_ITER = 50;
-
+    
+    // --- CORRECTION CRITIQUE : Pas de temps de relaxation pseudo-temporel ---
+    // Correspond au dt'_m = 0.1 de la section 3.1 du papier pour l'intégration semi-implicite 
+    // des équations d'évolution (15) et (16).
+    const double dt_relax = config.simulation.dt_relax;
+    
     // 2. Boucle Repeat-Until (Algorithme couplé itératif staggered)
     do {
         m++;
 
         // Ligne 6 de l'Algorithme 1 : P_m utilise P_m-1, Phi_m-1, V_m-1
         if (config.physics_toggle.polarization) { 
-            // Appel au nouveau solveur monolithique
-            polarization.update_P(time, fracture, mechanics, electrostatics, math); // CORRIGÉ
+            // MODIFICATION : on passe dt_relax au lieu du dt global implicite
+            polarization.update_P(time, dt_relax, fracture, mechanics, electrostatics, math); 
         }
         
         // Ligne 7 de l'Algorithme 1 : u_m utilise P_m et V_m-1
         if (config.physics_toggle.mechanics) {
+            // La mécanique est instantanée (équilibre statique), pas besoin de dt_relax
             mechanics.update_u(time, polarization, fracture, math);
         }
         
         // Ligne 8 de l'Algorithme 1 : Phi_m utilise P_m et V_m-1
         if (config.physics_toggle.electrostatics) {
-            electrostatics.update_phi(time, polarization, fracture, math); // CORRIGÉ
+            // L'électrostatique est instantanée, pas besoin de dt_relax
+            electrostatics.update_phi(time, polarization, fracture, math); 
         }
         
         // Ligne 9 de l'Algorithme 1 : V_m utilise P_m, u_m, Phi_m et V_m-1
         if (config.physics_toggle.fracture) {
-            fracture.update_v(dt, polarization, mechanics, electrostatics, math);
+            // MODIFICATION : on utilise dt_relax au lieu de dt (0.03) pour la fracture
+            fracture.update_v(dt_relax, polarization, mechanics, electrostatics, math);
         }
 
         // 3. Vérification de la convergence (Ligne 10)
@@ -210,20 +219,28 @@ void Simulation::extract_and_save_results(double time, int step, const std::stri
     diagnostics.append_csv(energy_csv_path);
     diagnostics.compute_nodal_energies(polarization, mechanics, fracture, electrostatics, math);
 
+    // --- Projection nodale du tenseur des contraintes (pour diagnostic sigma_12) ---
+    if (config.physics_toggle.mechanics) {
+        mechanics.compute_stress_field(polarization, fracture, math);
+    }
+
     if (step % config.simulation.save_frequency == 0) {
         std::string filename = config.simulation.output_dir + "/VTK_" + initial_time_str + 
                                "/multiphysics_results" + std::to_string(step / config.simulation.save_frequency) + ".vtk";            
         
         exporter.exportMultiPhysicsVTK(
             filename, 
-            {"v", "phi", "Energy_Gradient", "Energy_Elastic", "Energy_Landau", "Energy_Electric", "Energy_Surface"}, 
+            {"v", "phi", "Energy_Gradient", "Energy_Elastic", "Energy_Landau", "Energy_Electric", "Energy_Surface",
+             "sigma_xx", "sigma_yy", "sigma_xy"},                                   
             {&fracture.get_v(), &electrostatics.get_phi(),
              &diagnostics.get_U_nodal(), &diagnostics.get_W_nodal(), 
              &diagnostics.get_chi_nodal(), &diagnostics.get_elec_nodal(), 
-             &diagnostics.get_surf_nodal()},
+             &diagnostics.get_surf_nodal(),
+             &mechanics.get_sigma_xx(), &mechanics.get_sigma_yy(), &mechanics.get_sigma_xy()}, 
             {"P", "U", "E"}, 
             {&polarization.get_Px(), &mechanics.get_ux(), &electrostatics.get_Ex()}, 
             {&polarization.get_Py(), &mechanics.get_uy(), &electrostatics.get_Ey()}
         );
     }
 }
+

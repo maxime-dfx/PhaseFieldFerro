@@ -4,6 +4,7 @@
 #include "Utils/Logger.h"
 #include <omp.h>
 #include <algorithm>
+#include <cstdlib>
 
 Polarization::Polarization(const Datafile& config, const Mesh& mesh, const BoundaryManager& bc_manager)
     : config(config), mesh(mesh), bc_manager(bc_manager)
@@ -13,23 +14,31 @@ Polarization::Polarization(const Datafile& config, const Mesh& mesh, const Bound
     Px_current.setZero(n_nodes); Py_current.setZero(n_nodes);
     Px_n.setZero(n_nodes); Py_n.setZero(n_nodes);
 
+    appliquer_conditions_initiales();
+}
+
+void Polarization::appliquer_conditions_initiales() {
+    size_t n_nodes = mesh.get_num_nodes();
     if (config.polarization.type == InitializationType::UNIFORM) {
         Px_current.setConstant(config.polarization.val_x_0);
         Py_current.setConstant(config.polarization.val_y_0);
     } else if (config.polarization.type == InitializationType::RANDOM) {
+        double amp_x = config.polarization.val_x_0; 
+        double amp_y = config.polarization.val_y_0; 
+
         for (size_t i = 0; i < n_nodes; ++i) {
-            Px_current[i] = static_cast<double>(rand()) / RAND_MAX;
-            Py_current[i] = static_cast<double>(rand()) / RAND_MAX;
+            Px_current[i] = ((static_cast<double>(rand()) / RAND_MAX) * 2.0 - 1.0) * amp_x;
+            Py_current[i] = ((static_cast<double>(rand()) / RAND_MAX) * 2.0 - 1.0) * amp_y;
         }
     }
     Px_n = Px_current;
     Py_n = Py_current;
 }
 
-void Polarization::update_P(double time, const Fracture& fracture, const Mechanics& mechanics, const Electrostatics& electrostatics, const Math& math)
+void Polarization::update_P(double time, double dt_relax,  const Fracture& fracture, const Mechanics& mechanics, const Electrostatics& electrostatics, const Math& math)
 {
     (void)time; 
-    double dt = config.simulation.dt;
+    double dt = dt_relax;
     const int n_nodes = static_cast<int>(Px_current.size());
     const int system_size = 2 * n_nodes;
 
@@ -60,10 +69,12 @@ void Polarization::update_P(double time, const Fracture& fracture, const Mechani
 
 void Polarization::map_global_vector_to_components(const Eigen::VectorXd& P_new) {
     const int n_nodes = static_cast<int>(Px_current.size());
+    const double omega = 1.0; 
+
     #pragma omp parallel for schedule(static)
     for (int i = 0; i < n_nodes; ++i) {
-        Px_current(i) = P_new(2 * i);
-        Py_current(i) = P_new(2 * i + 1);
+        Px_current(i) = omega * P_new(2 * i)     + (1.0 - omega) * Px_prev_iter(i);
+        Py_current(i) = omega * P_new(2 * i + 1) + (1.0 - omega) * Py_prev_iter(i);
     }
 }
 

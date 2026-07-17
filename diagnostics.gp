@@ -4,7 +4,7 @@
 # ==============================================================================
 
 set datafile separator ","
-CSV = "../output/energies_final.csv"   # <-- change le nom/chemin si besoin
+CSV = "../output/energies.csv"   # <-- change le nom/chemin si besoin
 
 set terminal pngcairo size 1000,750 enhanced font "Arial,12"
 set grid
@@ -37,6 +37,11 @@ set xlabel "Load step"
 set ylabel "Energy"
 set key top left
 plot CSV using 1:3  with lines lw 2 title "U\\_total (domain wall)", \
+     CSV using 1:4  with lines lw 2 title "W\\_total (electroelastic)", \
+     CSV using 1:5  with lines lw 2 title "chi\\_total (Landau-Devonshire)", \
+     CSV using 1:6  with lines lw 2 title "electric\\_total", \
+     CSV using 1:7  with lines lw 2 title "bulk\\_enthalpy", \
+     CSV using 1:8  with lines lw 2 dt 2 title "surface\\_energy" \
 
 
 # ------------------------------------------------------------------

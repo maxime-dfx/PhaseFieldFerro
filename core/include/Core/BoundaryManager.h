@@ -92,11 +92,11 @@ public:
     void add_rule_py (std::shared_ptr<BoundaryShape> shape, BCType type, BCProfile profile);
 
     // Fonction de confort pour la validation (sans passer par TOML)
-    void add_rule_phi_constant(std::shared_ptr<BoundaryShape> shape, BCType type, double value);
-    void add_rule_ux_constant (std::shared_ptr<BoundaryShape> shape, BCType type, double value);
-    void add_rule_uy_constant (std::shared_ptr<BoundaryShape> shape, BCType type, double value);
-    void add_rule_px_constant (std::shared_ptr<BoundaryShape> shape, BCType type, double value);
-    void add_rule_py_constant (std::shared_ptr<BoundaryShape> shape, BCType type, double value);
+    void add_rule_phi_constant(std::shared_ptr<BoundaryShape> shape, BCType type, double value, double t_start);
+    void add_rule_ux_constant (std::shared_ptr<BoundaryShape> shape, BCType type, double value, double t_start);
+    void add_rule_uy_constant (std::shared_ptr<BoundaryShape> shape, BCType type, double value, double t_start);
+    void add_rule_px_constant (std::shared_ptr<BoundaryShape> shape, BCType type, double value, double t_start);
+    void add_rule_py_constant (std::shared_ptr<BoundaryShape> shape, BCType type, double value, double t_start);
 
 private:
     const Mesh& m_mesh;

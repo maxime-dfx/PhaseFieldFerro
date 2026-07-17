@@ -7,6 +7,7 @@
 # Résultats de simulation
 /data/vtk/
 /data/logs/
+/results/
 
 # IDE et fichiers système
 .vscode/

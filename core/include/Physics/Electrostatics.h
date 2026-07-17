@@ -2,6 +2,7 @@
 #define PHYSICS_ELECTROSTATICS_H
 
 #include <Eigen/Core>
+#include <vector>
 #include "IO/Datafile.h"
 #include "Core/Mesh.h"
 #include "Core/BoundaryManager.h"
@@ -26,6 +27,12 @@ private:
     Eigen::VectorXd Ex_current;
     Eigen::VectorXd Ey_current;
 
+    // --- Fonctions de routage et d'initialisation ---
+    void appliquer_conditions_initiales();
+
+    double calculer_champ_triangle(const Element& elem, const Eigen::VectorXd& champ_nodal) const;
+    double calculer_champ_quadrangle(const Element& elem, const GaussPoint2D& gp, const Eigen::VectorXd& champ_nodal) const;
+
 public:
     Electrostatics(const Datafile& config, const Mesh& mesh, const BoundaryManager& bc_manager);
 
@@ -44,6 +51,7 @@ public:
     const Eigen::VectorXd& get_Ex() const { return Ex_current; }
     const Eigen::VectorXd& get_Ey() const { return Ey_current; }
     const Eigen::VectorXd& get_phi() const { return phi_current; }
+    void set_phi(const Eigen::VectorXd& val) { phi_n = val; }
 };
 
 #endif // PHYSICS_ELECTROSTATICS_H

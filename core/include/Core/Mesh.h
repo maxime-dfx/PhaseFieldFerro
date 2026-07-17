@@ -49,4 +49,5 @@ public:
 
     std::vector<int> get_boundary_nodes(int edge_id) const;
     std::vector<std::array<double, 2>> get_element_coords(int elem_index) const;
+    std::array<double, 2> get_node_coords(size_t node_index) const;
 };

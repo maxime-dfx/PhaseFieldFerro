@@ -7,14 +7,18 @@
 #endif
 
 namespace Profiles {
-    inline BCProfile Constant(double val) {
-        return [val](double, double, double) { return val; };
+    inline BCProfile Constant(double val, double t_start) {
+        return [=](double, double, double t) {
+            if (t <= t_start) return 0.0;
+            return val;
+        };
     }
 
-    inline BCProfile TimeRamp(double val_start, double val_end, double t_end) {
+    inline BCProfile TimeRamp(double val_start, double val_end, double t_start, double t_end) {
         return [=](double, double, double t) {
+            if (t <= t_start) return val_start;
             if (t >= t_end) return val_end;
-            return val_start + (val_end - val_start) * (t / t_end);
+            return val_start + (val_end - val_start) * ((t - t_start) / (t_end - t_start));
         };
     }
 
@@ -59,11 +63,11 @@ void BoundaryManager::add_rule_uy (std::shared_ptr<BoundaryShape> shape, BCType 
 void BoundaryManager::add_rule_px (std::shared_ptr<BoundaryShape> shape, BCType type, BCProfile profile) { m_rules_px.push_back({shape, type, profile}); }
 void BoundaryManager::add_rule_py (std::shared_ptr<BoundaryShape> shape, BCType type, BCProfile profile) { m_rules_py.push_back({shape, type, profile}); }
 
-void BoundaryManager::add_rule_phi_constant(std::shared_ptr<BoundaryShape> shape, BCType type, double value) { add_rule_phi(shape, type, Profiles::Constant(value)); }
-void BoundaryManager::add_rule_ux_constant(std::shared_ptr<BoundaryShape> shape, BCType type, double value)  { add_rule_ux(shape, type, Profiles::Constant(value)); }
-void BoundaryManager::add_rule_uy_constant(std::shared_ptr<BoundaryShape> shape, BCType type, double value)  { add_rule_uy(shape, type, Profiles::Constant(value)); }
-void BoundaryManager::add_rule_px_constant(std::shared_ptr<BoundaryShape> shape, BCType type, double value)  { add_rule_px(shape, type, Profiles::Constant(value)); }
-void BoundaryManager::add_rule_py_constant(std::shared_ptr<BoundaryShape> shape, BCType type, double value)  { add_rule_py(shape, type, Profiles::Constant(value)); }
+void BoundaryManager::add_rule_phi_constant(std::shared_ptr<BoundaryShape> shape, BCType type, double value, double t_start) { add_rule_phi(shape, type, Profiles::Constant(value, t_start)); }
+void BoundaryManager::add_rule_ux_constant(std::shared_ptr<BoundaryShape> shape, BCType type, double value, double t_start)  { add_rule_ux(shape, type, Profiles::Constant(value, t_start)); }
+void BoundaryManager::add_rule_uy_constant(std::shared_ptr<BoundaryShape> shape, BCType type, double value, double t_start)  { add_rule_uy(shape, type, Profiles::Constant(value, t_start)); }
+void BoundaryManager::add_rule_px_constant(std::shared_ptr<BoundaryShape> shape, BCType type, double value, double t_start)  { add_rule_px(shape, type, Profiles::Constant(value, t_start)); }
+void BoundaryManager::add_rule_py_constant(std::shared_ptr<BoundaryShape> shape, BCType type, double value, double t_start)  { add_rule_py(shape, type, Profiles::Constant(value, t_start)); }
 
 void BoundaryManager::update_time(double t) {
     const auto& all_nodes = m_mesh.get_nodes();
@@ -95,6 +99,13 @@ void BoundaryManager::update_time(double t) {
     apply_rules(m_rules_uy, m_bc_uy);
     apply_rules(m_rules_px, m_bc_px);
     apply_rules(m_rules_py, m_bc_py);
+
+    int count_phi = 0, count_px = 0, count_ux = 0;
+    for (const auto& bc : m_bc_phi) { if (bc.type == BCType::DIRICHLET) count_phi++; }
+    for (const auto& bc : m_bc_px) { if (bc.type == BCType::DIRICHLET) count_px++; }
+    for (const auto& bc : m_bc_ux) { if (bc.type == BCType::DIRICHLET) count_ux++; }
+    
+    // Logger::debug("[DEBUG CL] Application a t=%f -> Noeuds Dirichlet : phi=%d, px=%d, ux=%d", t, count_phi, count_px, count_ux, m_config.simulation.debug_enabled);
 }
 
 void BoundaryManager::clear_all_rules() {
@@ -115,16 +126,16 @@ void BoundaryManager::initialize_all_boundaries() {
         else continue;
 
         BCProfile profile;
-        if (r.profile == "constant")              profile = Profiles::Constant(r.val);
-        else if (r.profile == "time_ramp")        profile = Profiles::TimeRamp(r.val_start, r.val_end, r.t_end);
+        if (r.profile == "constant")              profile = Profiles::Constant(r.val, r.t_start);
+        else if (r.profile == "time_ramp")        profile = Profiles::TimeRamp(r.val_start, r.val_end, r.t_start, r.t_end);
         else if (r.profile == "time_sine")        profile = Profiles::TimeSine(r.amplitude, r.frequency, r.offset);
         else if (r.profile == "spatial_tanh")     profile = Profiles::SpatialTanhX(r.P0, r.x0, r.epsilon);
         else if (r.profile == "spatial_parabola") profile = Profiles::SpatialParabolaY(r.max_val, r.y_center, r.width);
         else if (r.profile == "traveling_wave")   profile = Profiles::TravelingWave(r.amplitude, r.k, r.omega);
-        else profile = Profiles::Constant(r.val);
+        else profile = Profiles::Constant(r.val, r.t_start);
 
         BCType type = (r.bc_type == "NEUMANN") ? BCType::NEUMANN : BCType::DIRICHLET;
-
+        // Logger::debug("[DEBUG CL] Lecture TOML - field: '%s' | shape: %s | bc_type: %s", r.field.c_str(), r.shape.c_str(), r.bc_type.c_str(), m_config.simulation.debug_enabled);
         if (r.field == "phi")      add_rule_phi(shape, type, profile);
         else if (r.field == "ux")  add_rule_ux(shape, type, profile);
         else if (r.field == "uy")  add_rule_uy(shape, type, profile);

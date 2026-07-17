@@ -20,10 +20,15 @@ private:
     Eigen::VectorXd v_n;
     Eigen::VectorXd v_backup;
 
+    // --- Fonction d'initialisation isolée ---
+    void appliquer_conditions_initiales();
+    double calculer_distance_signee_precrack(double x, double y, const PrecrackConfig& pc) const;
+
 public:
     Fracture(const Datafile& config, const Mesh& mesh);
 
-    void update_v(double dt, const Polarization& polarization, const Mechanics& mechanics, const Electrostatics& electrostatics, const Math& math);
+    void update_precrack_geometry(double time);
+    void update_v(double dt_relax, const Polarization& polarization, const Mechanics& mechanics, const Electrostatics& electrostatics, const Math& math);
     void enforce_physical_bounds(const Eigen::VectorXd& v_new);
 
     double calculate_error() const;
@@ -33,6 +38,7 @@ public:
     void update_history();
 
     const Eigen::VectorXd& get_v() const { return v_current; }
+    void set_v(const Eigen::VectorXd& val) { v_n = val; }
 };
 
 #endif // PHYSICS_FRACTURE_H

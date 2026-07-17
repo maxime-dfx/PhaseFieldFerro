@@ -21,11 +21,16 @@ endif()
 find_package(OpenMP REQUIRED)
 find_package(Eigen3 REQUIRED) 
 
+# Ajout de Gmsh (Indispensable pour la génération via API)
+find_library(GMSH_LIBRARY NAMES gmsh REQUIRED)
+find_path(GMSH_INCLUDE_DIR NAMES gmsh.h REQUIRED)
+
 # ==============================================================================
 # Architecture : Bibliothèque Centrale (CoreLib)
 # ==============================================================================
 set(CORE_SOURCES
-    core/src/Core/BoundaryManager.cpp  
+    core/src/Core/BoundaryManager.cpp 
+
     core/src/Core/Mesh.cpp               
     core/src/Core/MeshGenerator.cpp
     core/src/Core/MeshGeneratorGmsh.cpp
@@ -43,39 +48,36 @@ set(CORE_SOURCES
     core/src/Physics/PolarizationAssembler.cpp
     core/src/Physics/MechanicsAssembler.cpp
     core/src/Physics/ElectrostaticsAssembler.cpp
-    core/src/Physics/Math.cpp
-    core/src/Physics/Material.cpp
 
     core/src/Solvers/LinearSolver.cpp
 
     core/src/Utils/ProgressBar.cpp
 
     core/src/Simulation.cpp
-    
-
-    # --- Vos nouveaux fichiers Header-Only (Optionnels pour la compilation, utiles pour l'IDE) ---
-    # core/tests/FerroelectricMaterial.hpp
-    # core/tests/StaggeredSolver.hpp
-    # core/tests/BoundaryManager.hpp
-    # core/tests/MultiphysicsAssembler.hpp
-    # core/tests/Datafile.hpp
-    # core/tests/GmshReader.hpp
-    # core/tests/Element.hpp
+    core/src/Validation.cpp
 )
 
 add_library(CoreLib STATIC ${CORE_SOURCES})
 
 # ==============================================================================
-# FORCER LE LANGAGE C++ (INDISPENSABLE CAR IL N'Y A QUE DES .hpp AU-DESSUS)
+# Paramétrage de la bibliothèque
 # ==============================================================================
 set_target_properties(CoreLib PROPERTIES LINKER_LANGUAGE CXX)
 
-target_include_directories(CoreLib PUBLIC core/include)
+target_include_directories(CoreLib PUBLIC 
+    core/include
+    ${GMSH_INCLUDE_DIR}
+)
 
 if(OpenMP_CXX_FOUND)
     target_link_libraries(CoreLib PUBLIC OpenMP::OpenMP_CXX)
 endif()
-target_link_libraries(CoreLib PUBLIC Eigen3::Eigen) 
+
+# On lie Eigen3 et Gmsh
+target_link_libraries(CoreLib PUBLIC 
+    Eigen3::Eigen
+    ${GMSH_LIBRARY}
+) 
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(CoreLib PUBLIC -O3 -march=native -ffast-math -Wall -Wextra -Wpedantic)
@@ -91,30 +93,20 @@ endif()
 add_executable(PhaseFieldFerro core/src/main.cpp)
 target_link_libraries(PhaseFieldFerro PRIVATE CoreLib)
 
-# 2. Unités de Tests
-# add_executable(UnitTests core/tests/test_physics.cpp)
-# target_link_libraries(UnitTests PRIVATE CoreLib)
-
-# add_executable(MeshTests core/tests/test_mesh.cpp)
-# target_link_libraries(MeshTests PRIVATE CoreLib)
-
-# enable_testing()
-# add_test(NAME PhysicsTest COMMAND UnitTests)
-# add_test(NAME MeshTest COMMAND MeshTests)
+# 2. Application de Validation
+add_executable(Validation core/src/main_validation.cpp)
+target_link_libraries(Validation PRIVATE CoreLib)
 
 # ==========================================
 # Sécurisation de la mémoire sous Windows (MinGW)
 # ==========================================
 if(MINGW)
-    # Vérifie si la cible existe avant d'appliquer l'option (évite les crashs CMake)
+    # Augmente la taille de la stack pour éviter les stack overflows sur les gros maillages
     if(TARGET PhaseFieldFerro)
         target_link_options(PhaseFieldFerro PRIVATE -Wl,--stack,16777216)
     endif()
-    if(TARGET UnitTests)
-        target_link_options(UnitTests PRIVATE -Wl,--stack,16777216)
-    endif()
-    if(TARGET MeshTests)
-        target_link_options(MeshTests PRIVATE -Wl,--stack,16777216)
+    if(TARGET Validation)
+        target_link_options(Validation PRIVATE -Wl,--stack,16777216)
     endif()
 endif()
 
@@ -130,7 +122,7 @@ add_custom_target(clean-output
 add_custom_target(clean-export
     COMMAND ${CMAKE_COMMAND} -E remove_directory "${CMAKE_SOURCE_DIR}/output"
     COMMAND ${CMAKE_COMMAND} -E remove_directory "${CMAKE_BINARY_DIR}/output"
-    COMMAND ${CMAKE_COMMAND} -E remove_directory "${CMAKE_SOURCE_DIR}/build"
-    COMMAND ${CMAKE_COMMAND} -E remove_directory "${CMAKE_BINARY_DIR}/build"
-    COMMENT "Nettoyage complet (output et build) termine !"
+    # Note : Il n'est pas sécurisé de demander à CMake de supprimer son propre dossier build
+    # en cours d'exécution. Si tu veux supprimer build, fais un `rm -rf build` depuis le terminal.
+    COMMENT "Nettoyage des outputs termine !"
 )

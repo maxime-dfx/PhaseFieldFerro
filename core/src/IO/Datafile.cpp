@@ -21,6 +21,7 @@ Datafile::Datafile(const std::string& filename) {
         parse_chrono(raw_config);
         parse_physics(raw_config);
         parse_material(raw_config);
+        parse_fracture(raw_config);       
         parse_boundaries(raw_config);
 
     } catch (const toml::parse_error& err) {
@@ -39,6 +40,7 @@ void Datafile::parse_simulation(const toml::table& config) {
     
     simulation.total_time = get_val<int>(config, "simulation", "total_time", 100);
     simulation.dt = get_val<double>(config, "simulation", "dt", 0.1);
+    simulation.dt_relax = get_val<double>(config, "simulation", "dt_relax", 0.1);
     simulation.save_frequency = get_val<int>(config, "simulation", "save_frequency", 10);
     simulation.tol_ferro = get_val<double>(config, "simulation", "tolerance_ferro", 1e-3);
     simulation.tol_vfield = get_val<double>(config, "simulation", "tolerance_vfield", 1e-6);
@@ -70,13 +72,11 @@ void Datafile::parse_chrono(const toml::table& config) {
 }
 
 void Datafile::parse_physics(const toml::table& config) {
-    // 1. Activation des modules
     physics_toggle.polarization = get_val<bool>(config, "physics", "enable_polarization", true);
     physics_toggle.electrostatics = get_val<bool>(config, "physics", "enable_electrostatics", true);
     physics_toggle.mechanics = get_val<bool>(config, "physics", "enable_mecanics", true);
     physics_toggle.fracture = get_val<bool>(config, "physics", "enable_fracture", true);
 
-    // 2. Fonction lambda pour factoriser le code d'initialisation (DRY)
     auto parse_init = [&](const std::string& section, const std::string& key_type, const std::string& key_x, const std::string& key_y) {
         PhysicsInitConfig c;
         std::string t = get_val<std::string>(config, section, key_type, "UNIFORM");
@@ -86,16 +86,87 @@ void Datafile::parse_physics(const toml::table& config) {
         return c;
     };
 
-    // 3. Récupération des initialisations
     polarization = parse_init("polarization", "initial_polarization", "Px_0", "Py_0");
     mechanics = parse_init("mechanics", "initial_mechanics", "ux_0", "uy_0");
     electrostatics = parse_init("electrostatics", "initial_electrostatics", "Ex_0", "Ey_0");
 
-    // 4. Mode spécifique à la fracture
+}
+
+void Datafile::parse_fracture(const toml::table& config) {
+    // --- Mode de fissure (perméable / imperméable / conductive) ---
     std::string frac_mode = get_val<std::string>(config, "fracture", "mode", "PERMEABLE");
-    if (frac_mode == "IMPERMEABLE") fracture_mode = CrackBCType::IMPERMEABLE;
-    else if (frac_mode == "CONDUCTIVE") fracture_mode = CrackBCType::CONDUCTIVE;
-    else fracture_mode = CrackBCType::PERMEABLE;
+    if (frac_mode == "IMPERMEABLE") fracture.mode = CrackBCType::IMPERMEABLE;
+    else if (frac_mode == "CONDUCTIVE") fracture.mode = CrackBCType::CONDUCTIVE;
+    else fracture.mode = CrackBCType::PERMEABLE;
+
+    // --- Pré-fissure : activation ---
+    fracture.enable_precrack = get_val<bool>(config, "fracture", "enable_precrack", false);
+    if (auto precrack_tbl = config["fracture"]["precrack"].as_table()) {
+        fracture.enable_precrack = (*precrack_tbl)["enable"].value_or(bool(fracture.enable_precrack));
+    }
+
+    if (!fracture.enable_precrack) {
+        return;
+    }
+
+    auto precrack_tbl = config["fracture"]["precrack"].as_table();
+    if (!precrack_tbl) {
+        Logger::error("[Datafile] enable_precrack=true mais section [fracture.precrack] introuvable. Pre-fissure desactivee.");
+        fracture.enable_precrack = false;
+        return;
+    }
+
+    // --- Forme de la pré-fissure ---
+    std::string shape_str = (*precrack_tbl)["shape"].value_or<std::string>("segment");
+    if (shape_str == "segment") fracture.precrack.shape = PrecrackShape::SEGMENT;
+    else if (shape_str == "rect") fracture.precrack.shape = PrecrackShape::RECT;
+    else {
+        Logger::error("[Datafile] forme de precrack inconnue: '" + shape_str + "'. Utilisation de NONE.");
+        fracture.precrack.shape = PrecrackShape::NONE;
+    }
+
+    // --- Paramètres géométriques SEGMENT ---
+    fracture.precrack.x0         = (*precrack_tbl)["x0"].value_or<double>(0.0);
+    fracture.precrack.y0         = (*precrack_tbl)["y0"].value_or<double>(mesh.Ly / 2.0);
+    fracture.precrack.length     = (*precrack_tbl)["length"].value_or<double>(5.0);
+    fracture.precrack.half_width = (*precrack_tbl)["half_width"].value_or<double>(0.5);
+
+    // --- Paramètres géométriques RECT ---
+    fracture.precrack.xmin = (*precrack_tbl)["xmin"].value_or<double>(0.0);
+    fracture.precrack.xmax = (*precrack_tbl)["xmax"].value_or<double>(5.0);
+    fracture.precrack.ymin = (*precrack_tbl)["ymin"].value_or<double>(mesh.Ly / 2.0 - 2.0);
+    fracture.precrack.ymax = (*precrack_tbl)["ymax"].value_or<double>(mesh.Ly / 2.0 + 2.0);
+
+    // --- Profil du champ v ---
+    fracture.precrack.smooth           = (*precrack_tbl)["smooth"].value_or<bool>(true);
+    fracture.precrack.smoothing_length = (*precrack_tbl)["smoothing_length"].value_or(double(material.kappa));
+
+    // --- Croissance temporelle prescrite de la longueur (test de controle, v impose non resolu) ---
+    // Si absents, growth_length_start/end valent length par defaut (=> pas de croissance, comportement statique).
+    fracture.precrack.growth_enable = (*precrack_tbl)["growth_enable"].value_or<bool>(false);
+
+    double default_length = fracture.precrack.length;
+    double default_t_end  = simulation.total_time;
+
+    fracture.precrack.growth_enable = (*precrack_tbl)["growth_enable"].value_or<bool>(false);
+
+    fracture.precrack.growth_length_start = (*precrack_tbl)["growth_length_start"].value_or<double>(fracture.precrack.length + 0.0);
+    fracture.precrack.growth_length_end   = (*precrack_tbl)["growth_length_end"].value_or<double>(fracture.precrack.length + 0.0);
+    fracture.precrack.growth_t_end        = (*precrack_tbl)["growth_t_end"].value_or<double>(simulation.total_time + 0.0);
+
+    if (fracture.precrack.growth_t_end <= 0.0) {
+        Logger::error("[Datafile] precrack.growth_t_end doit etre strictement positif. Valeur recue: " +
+                       std::to_string(fracture.precrack.growth_t_end) + ". Utilisation de simulation.total_time.");
+        fracture.precrack.growth_t_end = simulation.total_time;
+    }
+
+    // --- Garde-fou : la demi-largeur ne doit pas être plus petite que la taille de maille ---
+    double h_approx = std::min(mesh.dx, mesh.dy);
+    if (fracture.precrack.half_width < h_approx) {
+        Logger::error("[Datafile] precrack.half_width (" + std::to_string(fracture.precrack.half_width) +
+                       ") plus petit que la taille de maille (" + std::to_string(h_approx) +
+                       "). La pre-fissure risque de ne pas etre resolue par la discretisation.");
+    }
 }
 
 void Datafile::parse_material(const toml::table& config) {
@@ -156,6 +227,7 @@ void Datafile::parse_boundaries(const toml::table& config) {
                 r.val       = (*tbl)["val"].value_or<double>(0.0);
                 r.val_start = (*tbl)["val_start"].value_or<double>(0.0);
                 r.val_end   = (*tbl)["val_end"].value_or<double>(0.0);
+                r.t_start  = (*tbl)["t_start"].value_or<double>(0.0);
                 r.t_end     = (*tbl)["t_end"].value_or<double>(1.0);
                 r.amplitude = (*tbl)["amplitude"].value_or<double>(0.0);
                 r.frequency = (*tbl)["frequency"].value_or<double>(0.0);
