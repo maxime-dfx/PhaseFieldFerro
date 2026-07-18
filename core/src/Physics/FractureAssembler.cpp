@@ -146,23 +146,30 @@ void FractureAssembler::distribuer_local_vers_global(
     }
 }
 
-void FractureAssembler::appliquer_irreversibilite(
-    int n_dof, const Eigen::VectorXd& v_n, double max_diag, 
+ void FractureAssembler::appliquer_irreversibilite(
+
+    int n_dof, const Eigen::VectorXd& v_n, double max_diag,
+
     std::vector<Eigen::Triplet<double>>& global_triplets, Eigen::VectorXd& F_global)
+
 {
-    const double alpha = 2e-2; // Seuil de fracture totale
-    const double penalty = max_diag * 1e5; 
-    
-    for (int i = 0; i < n_dof; ++i) { 
+
+    const double alpha = 2e-2;
+
+    const double penalty = max_diag * 1e5;
+
+   
+
+    for (int i = 0; i < n_dof; ++i) {
+
         if (v_n(i) <= alpha) {
-            // 1. Nœud totalement cassé : on verrouille à 0
+
             global_triplets.emplace_back(i, i, penalty);
-            F_global(i) = 0.0; 
-        } 
-        else if (F_global(i) > 0.0) {
-            // 2. Nœud en cours de dégradation : on l'empêche de "guérir" (v_new ne doit pas dépasser v_n)
-            global_triplets.emplace_back(i, i, penalty);
-            F_global(i) += penalty * v_n(i);
+
+            F_global(i) = 0.0;
+
         }
+
     }
-}
+
+} 
