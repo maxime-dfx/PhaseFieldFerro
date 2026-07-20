@@ -31,14 +31,15 @@ find_path(GMSH_INCLUDE_DIR NAMES gmsh.h REQUIRED)
 set(CORE_SOURCES
     core/src/BC/BoundaryManager.cpp 
 
+    core/src/IO/Datafile.cpp
+    core/src/IO/Diagnostics.cpp
+    core/src/IO/IOManager.cpp
+    core/src/IO/MetricsLogger.cpp
+    core/src/IO/ResultsExporter.cpp
+
     core/src/Mesh/Mesh.cpp               
     core/src/Mesh/MeshGenerator.cpp
     core/src/Mesh/MeshGeneratorGmsh.cpp
-
-    core/src/IO/Datafile.cpp
-    core/src/IO/Diagnostics.cpp
-    core/src/IO/MetricsLogger.cpp
-    core/src/IO/ResultsExporter.cpp
 
     core/src/Physics/Fracture.cpp
     core/src/Physics/Polarization.cpp
@@ -49,11 +50,14 @@ set(CORE_SOURCES
     core/src/Physics/MechanicsAssembler.cpp
     core/src/Physics/ElectrostaticsAssembler.cpp
 
+    core/src/Simulation/TimeManager.cpp
+    core/src/Simulation/Simulation.cpp
+
     core/src/Solvers/LinearSolver.cpp
 
     core/src/Utils/ProgressBar.cpp
 
-    core/src/Simulation.cpp
+
     core/src/Validation.cpp
 )
 

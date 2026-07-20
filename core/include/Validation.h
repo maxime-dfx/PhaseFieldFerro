@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 #include "IO/Datafile.h"
-#include "Physics/Math.h"
+#include "Physics/MaterialModel.h"
 
 class Mesh;
 class Polarization;
@@ -25,7 +25,7 @@ struct ValidationResult {
 // via comparaison analytique <-> différences finies.
 class Validation {
 public:
-    explicit Validation(const Math& math);
+    explicit Validation(const MaterialModel& material);
 
     // Lance tous les tests et retourne les résultats
     std::vector<ValidationResult> run_all();
@@ -41,7 +41,7 @@ public:
     ValidationResult test_electrostatics_patch(const Datafile& config, const Mesh& mesh, Electrostatics& elec, Polarization& pol, Fracture& frac, Mechanics& mec);
 
 private:
-    const Math& math;
+    const MaterialModel& material;
 
     static constexpr double FD_EPSILON = 1e-6;   // pas de différences finies
     static constexpr double FD_EPSILON_2ND = 1e-4;   // epsilon plus grand pour dérivées secondes (stabilité numérique)

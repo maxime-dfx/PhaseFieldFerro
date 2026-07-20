@@ -1,5 +1,6 @@
 #include "Physics/Electrostatics.h"
 #include "Physics/ElectrostaticsAssembler.h"
+#include "Physics/MaterialModel.h"
 #include "Solvers/LinearSolver.h"
 #include "FEM/ShapeFunctions.h"
 #include "FEM/ElementIntegrator.h"
@@ -34,13 +35,13 @@ void Electrostatics::appliquer_conditions_initiales() {
     }
 }
 
-void Electrostatics::update_phi(double time, const Polarization& polarization, const Fracture& fracture, const Math& math) {
+void Electrostatics::update_phi(double time, const Polarization& polarization, const Fracture& fracture, const MaterialModel& material) {
     (void)time; 
     size_t n_nodes = mesh.get_num_nodes();
     Eigen::SparseMatrix<double> K_global(n_nodes, n_nodes);
     Eigen::VectorXd F_global = Eigen::VectorXd::Zero(n_nodes);
 
-    ElectrostaticsAssembler::assemble_system(mesh, polarization, fracture, math, config, bc_manager.get_phi_bcs(), K_global, F_global);
+    ElectrostaticsAssembler::assemble_system(mesh, polarization, fracture, material, config, bc_manager.get_phi_bcs(), K_global, F_global);
 
     Eigen::VectorXd phi_new = LinearSolver::solve_with_guess(K_global, F_global, phi_current, config.simulation.debug_enabled);
 

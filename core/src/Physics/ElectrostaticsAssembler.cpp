@@ -10,7 +10,7 @@
 // =====================================================================
 void ElectrostaticsAssembler::assemble_system(
     const Mesh& mesh, const Polarization& polarization, const Fracture& fracture, 
-    const Math& math, const Datafile& config, const std::vector<NodeBC>& bcs,
+    const MaterialModel& material, const Datafile& config, const std::vector<NodeBC>& bcs,
     Eigen::SparseMatrix<double>& K_global, Eigen::VectorXd& F_global) 
 {
     int num_elements = mesh.get_num_elements();
@@ -75,7 +75,7 @@ void ElectrostaticsAssembler::assemble_system(
 
             // 1. Calcul des matrices élémentaires
             calculer_matrices_elementaires(
-                elem, coords, polarization, fracture, math, config,
+                elem, coords, polarization, fracture, material, config,
                 K_local, F_local, N_buffer, grad_N_buffer
             );
 
@@ -111,7 +111,7 @@ void ElectrostaticsAssembler::assemble_system(
 void ElectrostaticsAssembler::calculer_matrices_elementaires(
     const Element& elem, const std::vector<std::array<double, 2>>& coords,
     const Polarization& polarization, const Fracture& fracture, 
-    const Math& math, const Datafile& config,
+    const MaterialModel& material, const Datafile& config,
     Eigen::Ref<Eigen::MatrixXd> K_local, Eigen::Ref<Eigen::VectorXd> F_local,
     Eigen::RowVectorXd& N_buffer, Eigen::MatrixXd& grad_N_buffer) 
 {
@@ -145,8 +145,8 @@ void ElectrostaticsAssembler::calculer_matrices_elementaires(
         }
 
         // Proprietes effectives modulees par le champ de fracture (jump-set)
-        double eps_eff = math.compute_effective_permittivity(v_gp, eta_k, is_impermeable);
-        Eigen::Vector2d P_eff = math.compute_effective_polarization(P_gp, v_gp, eta_k, is_impermeable);
+        double eps_eff = material.compute_effective_permittivity(v_gp, eta_k, is_impermeable);
+        Eigen::Vector2d P_eff = material.compute_effective_polarization(P_gp, v_gp, eta_k, is_impermeable);
 
         // Assemblage : K = int(B^T * eps_eff * B) dV ,  F = int(B^T * P_eff) dV
         K_local.topLeftCorner(n_dof, n_dof).noalias() += (B.transpose() * B) * (eps_eff * dV);

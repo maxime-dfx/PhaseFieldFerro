@@ -1,5 +1,6 @@
 #include "Mesh/Mesh.h"
 #include <cmath>
+#include <cstddef>
 
 Mesh::Mesh(double Lx, double Ly, int nx, int ny, ElementType type, 
            std::vector<Node> nodes, std::vector<Element> elements)

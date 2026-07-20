@@ -44,6 +44,7 @@ void Datafile::parse_simulation(const toml::table& config) {
     simulation.save_frequency = get_val<int>(config, "simulation", "save_frequency", 10);
     simulation.tol_ferro = get_val<double>(config, "simulation", "tolerance_ferro", 1e-3);
     simulation.tol_vfield = get_val<double>(config, "simulation", "tolerance_vfield", 1e-6);
+    simulation.max_iter = get_val<int>(config, "simulation", "max_iter", 50);
 }
 
 void Datafile::parse_mesh(const toml::table& config) {

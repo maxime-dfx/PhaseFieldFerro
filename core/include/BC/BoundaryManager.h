@@ -69,7 +69,7 @@ struct BCRule {
 
 class BoundaryManager {
 public:
-    BoundaryManager(const Mesh& mesh, const Datafile& config);
+    BoundaryManager(const Mesh& mesh, const std::vector<BoundaryRuleConfig>& boundary_rules);
 
     const Mesh& get_mesh() const { return m_mesh; }
 
@@ -100,7 +100,7 @@ public:
 
 private:
     const Mesh& m_mesh;
-    const Datafile& m_config;
+    const std::vector<BoundaryRuleConfig>& m_boundary_rules;
 
     std::vector<NodeBC> m_bc_phi, m_bc_ux, m_bc_uy, m_bc_px, m_bc_py;
     std::vector<BCRule> m_rules_phi, m_rules_ux, m_rules_uy, m_rules_px, m_rules_py;

@@ -1,6 +1,7 @@
 #include "Physics/Mechanics.h"
 #include "Physics/Polarization.h"
 #include "Physics/Fracture.h"
+#include "Physics/MaterialModel.h"
 #include "Physics/MechanicsAssembler.h"
 #include "Solvers/LinearSolver.h"
 #include "FEM/ShapeFunctions.h"
@@ -39,7 +40,7 @@ void Mechanics::appliquer_conditions_initiales() {
     }
 }
 
-void Mechanics::update_u(double time, const Polarization& polarization, const Fracture& fracture, const Math& math) {
+void Mechanics::update_u(double time, const Polarization& polarization, const Fracture& fracture, const MaterialModel& material) {
     (void)time;
     size_t n_nodes = mesh.get_num_nodes();
     size_t system_size = 2 * n_nodes;
@@ -47,7 +48,7 @@ void Mechanics::update_u(double time, const Polarization& polarization, const Fr
     Eigen::SparseMatrix<double> K_global(system_size, system_size);
     Eigen::VectorXd F_global = Eigen::VectorXd::Zero(system_size);
 
-    MechanicsAssembler::assemble_system(mesh, polarization, fracture, math, bc_manager.get_ux_bcs(), bc_manager.get_uy_bcs(), K_global, F_global);
+    MechanicsAssembler::assemble_system(mesh, polarization, fracture, material, bc_manager.get_ux_bcs(), bc_manager.get_uy_bcs(), K_global, F_global);
 
     Eigen::VectorXd U_guess(system_size);
     #pragma omp parallel for schedule(static)
@@ -100,7 +101,7 @@ Eigen::Matrix2d Mechanics::get_stress_at_gp(const Element& elem, const GaussPoin
                                              const std::vector<std::array<double, 2>>& coords,
                                              const Polarization& polarization,
                                              const Fracture& fracture,
-                                             const Math& math) const
+                                             const MaterialModel& material) const
 {
     int n_nodes = elem.get_num_nodes();
     std::array<int, 8> indices;
@@ -133,13 +134,13 @@ Eigen::Matrix2d Mechanics::get_stress_at_gp(const Element& elem, const GaussPoin
     }
 
     // 3. Contrainte spontanée et élastique
-    Eigen::Vector3d sigma_0_voigt = math.compute_sigma_0(P_gp);
-    Eigen::Matrix3d C = math.get_elastic_matrix();
+    Eigen::Vector3d sigma_0_voigt = material.compute_sigma_0(P_gp);
+    Eigen::Matrix3d C = material.get_elastic_matrix();
     
     Eigen::Vector3d eps_voigt;
     eps_voigt << strain(0,0), strain(1,1), 2.0 * strain(0,1);
 
-    Eigen::Vector3d sigma_voigt = ((v_gp * v_gp) + config.material.eta_k) * (C * eps_voigt - sigma_0_voigt);
+    Eigen::Vector3d sigma_voigt = ((v_gp * v_gp) + material.get_eta_k()) * (C * eps_voigt - sigma_0_voigt);
 
     // 4. Conversion Voigt -> Tenseur
     Eigen::Matrix2d sigma;
@@ -148,7 +149,7 @@ Eigen::Matrix2d Mechanics::get_stress_at_gp(const Element& elem, const GaussPoin
     return sigma;
 }
 
-void Mechanics::compute_stress_field(const Polarization& polarization, const Fracture& fracture, const Math& math) {
+void Mechanics::compute_stress_field(const Polarization& polarization, const Fracture& fracture, const MaterialModel& material) {
     const auto& elements = mesh.get_elements();
     const size_t n_nodes = mesh.get_num_nodes();
 
@@ -177,7 +178,7 @@ void Mechanics::compute_stress_field(const Polarization& polarization, const Fra
             }
 
             ElementIntegrator::integrate(elem, coords, N_std, grad_N, [&](int num_n, double dV, const GaussPoint2D& gp) {
-                Eigen::Matrix2d sigma = get_stress_at_gp(elem, gp, coords, polarization, fracture, math);
+                Eigen::Matrix2d sigma = get_stress_at_gp(elem, gp, coords, polarization, fracture, material);
                 for (int i = 0; i < num_n; ++i) {
                     thread_Fxx[tid](indices[i]) += sigma(0,0) * N_std(i) * dV;
                     thread_Fyy[tid](indices[i]) += sigma(1,1) * N_std(i) * dV;

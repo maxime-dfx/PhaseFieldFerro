@@ -2,6 +2,7 @@
 #include <vector>
 #include <array>
 #include <cassert>
+#include <cstddef>
 #include "Utils/Types.h"
 
 struct Node {

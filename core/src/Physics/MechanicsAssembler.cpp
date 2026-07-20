@@ -10,7 +10,7 @@
 // =====================================================================
 void MechanicsAssembler::assemble_system(
     const Mesh& mesh, const Polarization& polarization, const Fracture& fracture, 
-    const Math& math, const std::vector<NodeBC>& bcs_x, const std::vector<NodeBC>& bcs_y,
+    const MaterialModel& material, const std::vector<NodeBC>& bcs_x, const std::vector<NodeBC>& bcs_y,
     Eigen::SparseMatrix<double>& K_global, Eigen::VectorXd& F_global) 
 {
     int num_elements = mesh.get_num_elements();
@@ -79,7 +79,7 @@ void MechanicsAssembler::assemble_system(
 
             // 1. Calcul des matrices élémentaires
             calculer_matrices_elementaires(
-                elem, coords, polarization, fracture, math, 
+                elem, coords, polarization, fracture, material, 
                 K_local, F_local, N_buffer, grad_N_buffer // <-- Si tu mets à jour la signature pour passer les buffers
             );
 
@@ -114,7 +114,7 @@ void MechanicsAssembler::assemble_system(
 // =====================================================================
 void MechanicsAssembler::calculer_matrices_elementaires(
     const Element& elem, const std::vector<std::array<double, 2>>& coords,
-    const Polarization& polarization, const Fracture& fracture, const Math& math,
+    const Polarization& polarization, const Fracture& fracture, const MaterialModel& material,
     Eigen::Ref<Eigen::MatrixXd> K_local, Eigen::Ref<Eigen::VectorXd> F_local,
     Eigen::RowVectorXd& N_buffer, Eigen::MatrixXd& grad_N_buffer) 
 {
@@ -122,7 +122,7 @@ void MechanicsAssembler::calculer_matrices_elementaires(
     std::array<int, 8> indices;
     for (int i = 0; i < n_nodes_elem; ++i) indices[i] = elem.get_node_index(i);
 
-    Eigen::Matrix3d C = math.get_elastic_matrix();
+    Eigen::Matrix3d C = material.get_elastic_matrix();
 
     auto compute_physics = [&](int n_nodes, double dV, const GaussPoint2D& gp) {
         (void)gp;
@@ -149,13 +149,13 @@ void MechanicsAssembler::calculer_matrices_elementaires(
         }
 
         // Penalisation par la fracture : (v^2 + eta_k), cf. Eq. (8)/(13) du papier
-        double degradation_factor = (v_gp * v_gp) + math.eta_k;
+        double degradation_factor = (v_gp * v_gp) + material.get_eta_k();
 
         // Rigidite degradee dans la zone fissuree
         K_local.topLeftCorner(n_dof, n_dof).noalias() += (B.transpose() * C * B) * (dV * degradation_factor);
 
         // Contrainte spontanee (couplage electrostrictif), egalement degradee
-        Eigen::Vector3d sigma_0 = math.compute_sigma_0(P_gp);
+        Eigen::Vector3d sigma_0 = material.compute_sigma_0(P_gp);
         F_local.head(n_dof).noalias() -= B.transpose() * sigma_0 * (dV * degradation_factor);
     };
 

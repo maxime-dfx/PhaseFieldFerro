@@ -8,7 +8,7 @@
 #include "Physics/Polarization.h"
 #include "Physics/Mechanics.h"
 #include "Physics/Electrostatics.h"
-#include "Physics/Math.h"
+#include "Physics/MaterialModel.h"
 #include "IO/Datafile.h"
 #include "Mesh/Mesh.h"
 #include "FEM/ElementIntegrator.h"
@@ -18,7 +18,7 @@ public:
     static void assemble_system(
         double dt, const Eigen::VectorXd& v_n, const Mesh& mesh, 
         const Polarization& polarization, const Mechanics& mechanics, 
-        const Electrostatics& electrostatics, const Math& math, 
+        const Electrostatics& electrostatics, const MaterialModel& material, 
         const Datafile& config, Eigen::SparseMatrix<double>& K_global, 
         Eigen::VectorXd& F_global);
 
@@ -28,7 +28,7 @@ private:
         const Element& elem, const std::vector<std::array<double, 2>>& coords,
         double dt, const Eigen::VectorXd& v_n,
         const Polarization& polarization, const Mechanics& mechanics,
-        const Electrostatics& electrostatics, const Math& math, const Datafile& config,
+        const Electrostatics& electrostatics, const MaterialModel& material, const Datafile& config,
         Eigen::Ref<Eigen::MatrixXd> K_local, Eigen::Ref<Eigen::VectorXd> F_local,
         Eigen::RowVectorXd& N_buffer, Eigen::MatrixXd& grad_N_buffer);
 

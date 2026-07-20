@@ -7,7 +7,7 @@
 #include <array>
 #include "Physics/Polarization.h"
 #include "Physics/Fracture.h"
-#include "Physics/Math.h"
+#include "Physics/MaterialModel.h"
 #include "Mesh/Mesh.h"
 #include "BC/BoundaryManager.h"
 #include "FEM/ElementIntegrator.h"
@@ -16,14 +16,14 @@ class MechanicsAssembler {
 public:
     static void assemble_system(
         const Mesh& mesh, const Polarization& polarization, const Fracture& fracture, 
-        const Math& math, const std::vector<NodeBC>& bcs_x, const std::vector<NodeBC>& bcs_y,
+        const MaterialModel& material, const std::vector<NodeBC>& bcs_x, const std::vector<NodeBC>& bcs_y,
         Eigen::SparseMatrix<double>& K_global, Eigen::VectorXd& F_global);
 
 private:
     // Nos nouvelles fonctions spécialisées (Travailleurs)
     static void calculer_matrices_elementaires(
         const Element& elem, const std::vector<std::array<double, 2>>& coords,
-        const Polarization& polarization, const Fracture& fracture, const Math& math,
+        const Polarization& polarization, const Fracture& fracture, const MaterialModel& material,
         Eigen::Ref<Eigen::MatrixXd> K_local, Eigen::Ref<Eigen::VectorXd> F_local,
         Eigen::RowVectorXd& N_buffer, Eigen::MatrixXd& grad_N_buffer);
 

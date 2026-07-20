@@ -10,7 +10,7 @@
 
 class Polarization;
 class Fracture;
-class Math;
+class MaterialModel;
 class Element;
 struct GaussPoint2D;
 
@@ -41,7 +41,7 @@ private:
 public:
     Mechanics(const Datafile& config, const Mesh& mesh, const BoundaryManager& bc_manager);
 
-    void update_u(double time, const Polarization& polarization, const Fracture& fracture, const Math& math);
+    void update_u(double time, const Polarization& polarization, const Fracture& fracture, const MaterialModel& material);
     void map_global_vector_to_components(const Eigen::VectorXd& U_new);
 
     double calculate_error() const;
@@ -55,7 +55,7 @@ public:
                                   const std::vector<std::array<double, 2>>& coords,
                                   const Polarization& polarization,
                                   const Fracture& fracture,
-                                  const Math& math) const;
+                                  const MaterialModel& material) const;
     
     const Eigen::VectorXd& get_ux() const { return ux_current; }
     const Eigen::VectorXd& get_uy() const { return uy_current; }
@@ -63,7 +63,7 @@ public:
     void set_uy(const Eigen::VectorXd& uy) { uy_current = uy; }
 
     // Projection nodale du tenseur des contraintes (L2), à appeler après update_u()
-    void compute_stress_field(const Polarization& polarization, const Fracture& fracture, const Math& math);
+    void compute_stress_field(const Polarization& polarization, const Fracture& fracture, const MaterialModel& material);
 
     const Eigen::VectorXd& get_sigma_xx() const { return sigma_xx_current; }
     const Eigen::VectorXd& get_sigma_yy() const { return sigma_yy_current; }

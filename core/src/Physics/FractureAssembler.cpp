@@ -11,7 +11,7 @@
 void FractureAssembler::assemble_system(
     double dt, const Eigen::VectorXd& v_n, const Mesh& mesh, 
     const Polarization& polarization, const Mechanics& mechanics, 
-    const Electrostatics& electrostatics, const Math& math, 
+    const Electrostatics& electrostatics, const MaterialModel& material, 
     const Datafile& config, Eigen::SparseMatrix<double>& K_global, 
     Eigen::VectorXd& F_global) 
 {
@@ -66,7 +66,7 @@ void FractureAssembler::assemble_system(
 
             calculer_matrices_elementaires(
                 elem, coords, dt, v_n, polarization, mechanics, electrostatics, 
-                math, config, K_local, F_local, N_buffer, grad_N_buffer
+                material, config, K_local, F_local, N_buffer, grad_N_buffer
             );
 
             distribuer_local_vers_global(
@@ -98,7 +98,7 @@ void FractureAssembler::calculer_matrices_elementaires(
     const Element& elem, const std::vector<std::array<double, 2>>& coords,
     double dt, const Eigen::VectorXd& v_n,
     const Polarization& polarization, const Mechanics& mechanics,
-    const Electrostatics& electrostatics, const Math& math, const Datafile& config,
+    const Electrostatics& electrostatics, const MaterialModel& material, const Datafile& config,
     Eigen::Ref<Eigen::MatrixXd> K_local, Eigen::Ref<Eigen::VectorXd> F_local,
     Eigen::RowVectorXd& N_buffer, Eigen::MatrixXd& grad_N_buffer) 
 {
@@ -141,7 +141,7 @@ void FractureAssembler::calculer_matrices_elementaires(
         }
 
         // --- THERMODYNAMIQUE DE LA RUPTURE : force motrice H (fonction de eps, P, grad P, E) ---
-        double H_drive = math.compute_H_drive(grad_P_gp, P_gp, eps_gp, E_gp, is_impermeable);
+        double H_drive = material.compute_H_drive(grad_P_gp, P_gp, eps_gp, E_gp, is_impermeable);
 
         // --- DYNAMIQUE DE ALLEN-CAHN (Eq. 16 du papier) ---
         double mass_coeff = (mu_v / dt) + (Gc / (2.0 * kappa)) + 2.0 * H_drive;

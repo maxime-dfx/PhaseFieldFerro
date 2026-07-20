@@ -9,7 +9,7 @@
 
 class Polarization;
 class Fracture;
-class Math;
+class MaterialModel;
 class Element;
 struct GaussPoint2D;
 
@@ -36,7 +36,7 @@ private:
 public:
     Electrostatics(const Datafile& config, const Mesh& mesh, const BoundaryManager& bc_manager);
 
-    void update_phi(double time, const Polarization& polarization, const Fracture& fracture, const Math& math);
+    void update_phi(double time, const Polarization& polarization, const Fracture& fracture, const MaterialModel& material);
     void compute_electric_field();
 
     double get_Ex_at_gp(const Element& elem, const GaussPoint2D& gp) const;

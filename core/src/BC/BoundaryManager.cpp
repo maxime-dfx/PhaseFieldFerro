@@ -49,8 +49,8 @@ namespace Profiles {
     }
 }
 
-BoundaryManager::BoundaryManager(const Mesh& mesh, const Datafile& config)
-    : m_mesh(mesh), m_config(config)
+BoundaryManager::BoundaryManager(const Mesh& mesh, const std::vector<BoundaryRuleConfig>& boundary_rules) 
+    : m_mesh(mesh), m_boundary_rules(boundary_rules) 
 {
     int n_nodes = m_mesh.get_num_nodes();
     m_bc_phi.resize(n_nodes); m_bc_ux.resize(n_nodes); m_bc_uy.resize(n_nodes);
@@ -113,33 +113,33 @@ void BoundaryManager::clear_all_rules() {
 }
 
 void BoundaryManager::initialize_all_boundaries() {
-    auto rules = m_config.boundary_rules;
+    auto rules = m_boundary_rules;
     double Lx = m_mesh.get_Lx();
     double Ly = m_mesh.get_Ly();
 
-    for (const auto& r : rules) {
+    for (const auto& rule : m_boundary_rules) {
         std::shared_ptr<BoundaryShape> shape;
-        if (r.shape == "edge")        shape = std::make_shared<EdgeShape>(r.edge_name, Lx, Ly);
-        else if (r.shape == "point")  shape = std::make_shared<PointShape>(r.px, r.py);
-        else if (r.shape == "circle") shape = std::make_shared<CircleShape>(r.cx, r.cy, r.radius);
-        else if (r.shape == "rect")   shape = std::make_shared<RectShape>(r.xmin, r.xmax, r.ymin, r.ymax);
+        if (rule.shape == "edge")        shape = std::make_shared<EdgeShape>(rule.edge_name, Lx, Ly);
+        else if (rule.shape == "point")  shape = std::make_shared<PointShape>(rule.px, rule.py);
+        else if (rule.shape == "circle") shape = std::make_shared<CircleShape>(rule.cx, rule.cy, rule.radius);
+        else if (rule.shape == "rect")   shape = std::make_shared<RectShape>(rule.xmin, rule.xmax, rule.ymin, rule.ymax);
         else continue;
 
         BCProfile profile;
-        if (r.profile == "constant")              profile = Profiles::Constant(r.val, r.t_start);
-        else if (r.profile == "time_ramp")        profile = Profiles::TimeRamp(r.val_start, r.val_end, r.t_start, r.t_end);
-        else if (r.profile == "time_sine")        profile = Profiles::TimeSine(r.amplitude, r.frequency, r.offset);
-        else if (r.profile == "spatial_tanh")     profile = Profiles::SpatialTanhX(r.P0, r.x0, r.epsilon);
-        else if (r.profile == "spatial_parabola") profile = Profiles::SpatialParabolaY(r.max_val, r.y_center, r.width);
-        else if (r.profile == "traveling_wave")   profile = Profiles::TravelingWave(r.amplitude, r.k, r.omega);
-        else profile = Profiles::Constant(r.val, r.t_start);
+        if (rule.profile == "constant")              profile = Profiles::Constant(rule.val, rule.t_start);
+        else if (rule.profile == "time_ramp")        profile = Profiles::TimeRamp(rule.val_start, rule.val_end, rule.t_start, rule.t_end);
+        else if (rule.profile == "time_sine")        profile = Profiles::TimeSine(rule.amplitude, rule.frequency, rule.offset);
+        else if (rule.profile == "spatial_tanh")     profile = Profiles::SpatialTanhX(rule.P0, rule.x0, rule.epsilon);
+        else if (rule.profile == "spatial_parabola") profile = Profiles::SpatialParabolaY(rule.max_val, rule.y_center, rule.width);
+        else if (rule.profile == "traveling_wave")   profile = Profiles::TravelingWave(rule.amplitude, rule.k, rule.omega);
+        else profile = Profiles::Constant(rule.val, rule.t_start);
 
-        BCType type = (r.bc_type == "NEUMANN") ? BCType::NEUMANN : BCType::DIRICHLET;
-        // Logger::debug("[DEBUG CL] Lecture TOML - field: '%s' | shape: %s | bc_type: %s", r.field.c_str(), r.shape.c_str(), r.bc_type.c_str(), m_config.simulation.debug_enabled);
-        if (r.field == "phi")      add_rule_phi(shape, type, profile);
-        else if (r.field == "ux")  add_rule_ux(shape, type, profile);
-        else if (r.field == "uy")  add_rule_uy(shape, type, profile);
-        else if (r.field == "px")  add_rule_px(shape, type, profile);
-        else if (r.field == "py")  add_rule_py(shape, type, profile);
+        BCType type = (rule.bc_type == "NEUMANN") ? BCType::NEUMANN : BCType::DIRICHLET;
+        // Logger::debug("[DEBUG CL] Lecture TOML - field: '%s' | shape: %s | bc_type: %s", rule.field.c_str(), rule.shape.c_str(), rule.bc_type.c_str(), m_config.simulation.debug_enabled);
+        if (rule.field == "phi")      add_rule_phi(shape, type, profile);
+        else if (rule.field == "ux")  add_rule_ux(shape, type, profile);
+        else if (rule.field == "uy")  add_rule_uy(shape, type, profile);
+        else if (rule.field == "px")  add_rule_px(shape, type, profile);
+        else if (rule.field == "py")  add_rule_py(shape, type, profile);
     }
 }

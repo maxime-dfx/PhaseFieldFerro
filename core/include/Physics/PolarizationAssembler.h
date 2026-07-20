@@ -8,7 +8,7 @@
 #include "Physics/Fracture.h"
 #include "Physics/Mechanics.h"
 #include "Physics/Electrostatics.h"
-#include "Physics/Math.h"
+#include "Physics/MaterialModel.h"
 #include "IO/Datafile.h"
 #include "Mesh/Mesh.h"
 #include "BC/BoundaryManager.h"
@@ -21,7 +21,7 @@ public:
         const Eigen::VectorXd& Px_current, const Eigen::VectorXd& Py_current,
         const Eigen::VectorXd& Px_n, const Eigen::VectorXd& Py_n,
         const Mesh& mesh, const Fracture& fracture, const Mechanics& mechanics,
-        const Electrostatics& electrostatics, const Math& math, const Datafile& config,
+        const Electrostatics& electrostatics, const MaterialModel& material, const Datafile& config,
         const BoundaryManager& bc_manager,
         Eigen::SparseMatrix<double>& K_global, Eigen::VectorXd& F_global);
 
@@ -32,7 +32,7 @@ private:
         double dt, const Eigen::VectorXd& Px_current, const Eigen::VectorXd& Py_current,
         const Eigen::VectorXd& Px_n, const Eigen::VectorXd& Py_n,
         const Fracture& fracture, const Mechanics& mechanics,
-        const Electrostatics& electrostatics, const Math& math, const Datafile& config,
+        const Electrostatics& electrostatics, const MaterialModel& material, const Datafile& config,
         Eigen::Ref<Eigen::MatrixXd> K_local, Eigen::Ref<Eigen::VectorXd> F_local,
         Eigen::RowVectorXd& N_buffer, Eigen::MatrixXd& grad_N_buffer);
 

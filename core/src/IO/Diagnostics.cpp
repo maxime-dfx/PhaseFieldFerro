@@ -3,7 +3,7 @@
 #include "Physics/Mechanics.h"
 #include "Physics/Fracture.h"
 #include "Physics/Electrostatics.h"
-#include "Physics/Math.h"
+#include "Physics/MaterialModel.h"
 #include "FEM/ElementIntegrator.h"
 #include <iostream>
 #include <iomanip>
@@ -22,12 +22,12 @@ EnergyRecord Diagnostics::record(double load_step, double time,
                                  const Mechanics& mechanics, 
                                  const Fracture& fracture, 
                                  const Electrostatics& electrostatics, 
-                                 const Math& math) {
+                                 const MaterialModel& material) {
     EnergyRecord rec;
     rec.load_step = load_step;
     rec.time = time;
 
-    integrate_bulk_terms(polarization, mechanics, fracture, electrostatics, math, rec);
+    integrate_bulk_terms(polarization, mechanics, fracture, electrostatics, material, rec);
     integrate_surface_term(fracture, rec);
 
     rec.total_energy = rec.bulk_enthalpy + rec.surface_energy;
@@ -40,7 +40,7 @@ EnergyRecord Diagnostics::record(double load_step, double time,
 
 void Diagnostics::integrate_bulk_terms(const Polarization& polarization, const Mechanics& mechanics, 
                                        const Fracture& fracture, const Electrostatics& electrostatics, 
-                                       const Math& math, EnergyRecord& rec) const {
+                                       const MaterialModel& material, EnergyRecord& rec) const {
     double U_sum = 0.0, W_sum = 0.0, chi_sum = 0.0, elec_sum = 0.0;
     
     Eigen::RowVectorXd N(8);
@@ -75,16 +75,16 @@ void Diagnostics::integrate_bulk_terms(const Polarization& polarization, const M
                 Eigen::Matrix2d strain = mechanics.get_strain_at_gp(elem, gp, coords);
                 Eigen::Vector2d E(electrostatics.get_Ex_at_gp(elem, gp), electrostatics.get_Ey_at_gp(elem, gp));
 
-                double deg = (v_val * v_val + math.eta_k);
+                double deg = (v_val * v_val + material.get_eta_k());
                 
-                U_sum   += deg * math.U_energy(grad_P) * dV;
-                W_sum   += deg * math.W_energy(P, strain) * dV;
-                chi_sum += math.chi_energy(P) * dV;
+                U_sum   += deg * material.U_energy(grad_P) * dV;
+                W_sum   += deg * material.W_energy(P, strain) * dV;
+                chi_sum += material.chi_energy(P) * dV;
 
                 if (is_impermeable) {
-                    elec_sum += deg * (-P.dot(E) - 0.5 * math.eps0 * E.dot(E)) * dV;
+                    elec_sum += deg * (-P.dot(E) - 0.5 * material.get_eps0() * E.dot(E)) * dV;
                 } else {
-                    elec_sum += (-P.dot(E) - 0.5 * math.eps0 * E.dot(E)) * dV;
+                    elec_sum += (-P.dot(E) - 0.5 * material.get_eps0() * E.dot(E)) * dV;
                 }
             });
     }
@@ -167,7 +167,7 @@ void Diagnostics::append_csv(const std::string& path) {
 }
 
 void Diagnostics::compute_nodal_energies(const Polarization& polarization, const Mechanics& mechanics, 
-                                         const Fracture& fracture, const Electrostatics& electrostatics, const Math& math) {
+                                         const Fracture& fracture, const Electrostatics& electrostatics, const MaterialModel& material) {
     // Note: Implémentation simplifiée par projection nodale (L2) si nécessaire
     // Cette partie est souvent spécifique au type d'export VTK choisi.
 }

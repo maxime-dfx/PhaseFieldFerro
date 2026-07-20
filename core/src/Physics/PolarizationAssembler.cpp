@@ -9,13 +9,13 @@
 // 1. Fonction principale d'assemblage
 // =====================================================================
 void PolarizationAssembler::assemble_system(
-    double dt,
-    const Eigen::VectorXd& Px_current, const Eigen::VectorXd& Py_current,
-    const Eigen::VectorXd& Px_n, const Eigen::VectorXd& Py_n,
-    const Mesh& mesh, const Fracture& fracture, const Mechanics& mechanics,
-    const Electrostatics& electrostatics, const Math& math, const Datafile& config,
-    const BoundaryManager& bc_manager,
-    Eigen::SparseMatrix<double>& K_global, Eigen::VectorXd& F_global) 
+        double dt,
+        const Eigen::VectorXd& Px_current, const Eigen::VectorXd& Py_current,
+        const Eigen::VectorXd& Px_n, const Eigen::VectorXd& Py_n,
+        const Mesh& mesh, const Fracture& fracture, const Mechanics& mechanics,
+        const Electrostatics& electrostatics, const MaterialModel& material, const Datafile& config,
+        const BoundaryManager& bc_manager,
+        Eigen::SparseMatrix<double>& K_global, Eigen::VectorXd& F_global) 
 {
     int num_elements = mesh.get_num_elements();
     int num_nodes_total = mesh.get_num_nodes();
@@ -85,7 +85,7 @@ void PolarizationAssembler::assemble_system(
             // 1. Calcul des matrices élémentaires
             calculer_matrices_elementaires(
                 elem, coords, dt, Px_current, Py_current, Px_n, Py_n,
-                fracture, mechanics, electrostatics, math, config,
+                fracture, mechanics, electrostatics, material, config,
                 K_local, F_local, N_buffer, grad_N_buffer
             );
 
@@ -129,7 +129,7 @@ void PolarizationAssembler::calculer_matrices_elementaires(
     double dt, const Eigen::VectorXd& Px_current, const Eigen::VectorXd& Py_current,
     const Eigen::VectorXd& Px_n, const Eigen::VectorXd& Py_n,
     const Fracture& fracture, const Mechanics& mechanics,
-    const Electrostatics& electrostatics, const Math& math, const Datafile& config,
+    const Electrostatics& electrostatics, const MaterialModel& material, const Datafile& config,
     Eigen::Ref<Eigen::MatrixXd> K_local, Eigen::Ref<Eigen::VectorXd> F_local,
     Eigen::RowVectorXd& N_buffer, Eigen::MatrixXd& grad_N_buffer) 
 {
@@ -161,7 +161,7 @@ void PolarizationAssembler::calculer_matrices_elementaires(
         Eigen::Vector2d E_gp(electrostatics.get_Ex_at_gp(elem, gp), electrostatics.get_Ey_at_gp(elem, gp));
 
         double penalite = (v_gp * v_gp) + config.material.eta_k;
-        GinzburgLandauTerms GL = math.compute_GL_terms(P_gp, strain, E_gp, penalite, is_impermeable);
+        GinzburgLandauTerms GL = material.compute_GL_terms(P_gp, strain, E_gp, penalite, is_impermeable);
 
         double inv_dt = mu_p / dt;
 

@@ -1,24 +1,31 @@
 #include "Simulation.h"
+#include "Physics/MaterialModel.h"
 #include "Utils/Logger.h"
 #include "Utils/ProgressBar.h"
 #include <algorithm> 
 #include <stdexcept> 
 
+// =========================================================================
 // Constructeur : Orchestration et injection des dépendances
-Simulation::Simulation(const Datafile& config_in, const Mesh& mesh_in, ResultsExporter& exporter_in)
+// =========================================================================
+Simulation::Simulation(const Datafile& config_in, const Mesh& mesh_in, ResultsExporter& exporter_in, const MaterialModel& material_in)
     : config(config_in),
       mesh(mesh_in),
       exporter(exporter_in),
-      boundary_manager(mesh_in, config_in),
-      math(config_in), 
+      boundary_manager(mesh_in, config_in.boundary_rules),
+      material(material_in), 
       diagnostics(config_in, mesh_in),
       chrono(),
+      // Initialisation des modules physiques (Couplage explicite conservé)
       mechanics(config_in, mesh_in, boundary_manager),
       electrostatics(config_in, mesh_in, boundary_manager),
       fracture(config_in, mesh_in),
-      polarization(config_in, mesh_in, boundary_manager){
+      polarization(config_in, mesh_in, boundary_manager),
+      // Initialisation des nouveaux managers délégués
+      time_manager(config_in),
+      io_manager(exporter_in, diagnostics, config_in.simulation.output_dir + "/energies.csv", config_in)
+{
     boundary_manager.initialize_all_boundaries();
-    energy_csv_path = config.simulation.output_dir + "/energies.csv";
 }
 
 void Simulation::initialize_mesh() {
@@ -38,9 +45,8 @@ void Simulation::initialize_mesh() {
 void Simulation::initialize_physics() {
     Logger::info("Starting multi-physics initialization...");
 
-    // Enregistrement de l'état initial (t=0) dans le CSV d'énergies
-    diagnostics.record(0.0, 0.0, polarization, mechanics, fracture, electrostatics, math);
-    diagnostics.append_csv(energy_csv_path);
+    // Enregistrement de l'état initial (t=0) délégué au IOManager
+    io_manager.extract_and_save_results(0.0, 0, "initial", polarization, mechanics, fracture, electrostatics, material);
     
     Logger::info("Initialization phase complete.");
 }
@@ -51,7 +57,7 @@ void Simulation::initialize_physics() {
 int Simulation::compute_one_step_physics(double time, double dt) {
     boundary_manager.update_time(time);
     
-    // 1. Sauvegarde de l'état n (itération m=0) pour le calcul d'erreur
+    // 1. Sauvegarde de l'état n (itération m=0) pour le calcul d'erreur intra-pas
     if (config.physics_toggle.polarization) polarization.save_previous_iteration();
     if (config.physics_toggle.mechanics) mechanics.save_previous_iteration();
     if (config.physics_toggle.electrostatics) electrostatics.save_previous_iteration();
@@ -62,39 +68,33 @@ int Simulation::compute_one_step_physics(double time, double dt) {
     double err_p = 1.0, err_v = 1.0;
     const double tol_ferro = config.simulation.tol_ferro;  
     const double tol_vfield = config.simulation.tol_vfield; 
-    const int MAX_ITER = 50;
+    const int MAX_ITER = config.simulation.max_iter; 
     
-    // --- CORRECTION CRITIQUE : Pas de temps de relaxation pseudo-temporel ---
-    // Correspond au dt'_m = 0.1 de la section 3.1 du papier pour l'intégration semi-implicite 
-    // des équations d'évolution (15) et (16).
+    // Temps de relaxation pseudo-temporel (section 3.1 du papier, eq 15 et 16)
     const double dt_relax = config.simulation.dt_relax;
     
     // 2. Boucle Repeat-Until (Algorithme couplé itératif staggered)
     do {
         m++;
 
-        // Ligne 6 de l'Algorithme 1 : P_m utilise P_m-1, Phi_m-1, V_m-1
+        // Ligne 6 : P_m utilise P_m-1, Phi_m-1, V_m-1
         if (config.physics_toggle.polarization) { 
-            // MODIFICATION : on passe dt_relax au lieu du dt global implicite
-            polarization.update_P(time, dt_relax, fracture, mechanics, electrostatics, math); 
+            polarization.update_P(time, dt_relax, fracture, mechanics, electrostatics, material); 
         }
         
-        // Ligne 7 de l'Algorithme 1 : u_m utilise P_m et V_m-1
+        // Ligne 7 : u_m utilise P_m et V_m-1 (Instantané)
         if (config.physics_toggle.mechanics) {
-            // La mécanique est instantanée (équilibre statique), pas besoin de dt_relax
-            mechanics.update_u(time, polarization, fracture, math);
+            mechanics.update_u(time, polarization, fracture, material);
         }
         
-        // Ligne 8 de l'Algorithme 1 : Phi_m utilise P_m et V_m-1
+        // Ligne 8 : Phi_m utilise P_m et V_m-1 (Instantané)
         if (config.physics_toggle.electrostatics) {
-            // L'électrostatique est instantanée, pas besoin de dt_relax
-            electrostatics.update_phi(time, polarization, fracture, math); 
+            electrostatics.update_phi(time, polarization, fracture, material); 
         }
         
-        // Ligne 9 de l'Algorithme 1 : V_m utilise P_m, u_m, Phi_m et V_m-1
+        // Ligne 9 : V_m utilise P_m, u_m, Phi_m et V_m-1
         if (config.physics_toggle.fracture) {
-            // MODIFICATION : on utilise dt_relax au lieu de dt (0.03) pour la fracture
-            fracture.update_v(dt_relax, polarization, mechanics, electrostatics, math);
+            fracture.update_v(dt_relax, polarization, mechanics, electrostatics, material);
         }
 
         // 3. Vérification de la convergence (Ligne 10)
@@ -123,63 +123,60 @@ int Simulation::compute_one_step_physics(double time, double dt) {
 }
 
 // =========================================================================
-// BOUCLE TEMPORELLE ADAPTATIVE (TIME STEPPER)
+// BOUCLE TEMPORELLE ADAPTATIVE (ORCHESTRÉE PAR LE TIMEMANAGER)
 // =========================================================================
 void Simulation::run() {
     if (config.chrono.run) chrono.start();
     Logger::info("Starting simulation...");
-    std::string initial_time = chrono.get_datetime_string();
+    std::string initial_time_str = chrono.get_datetime_string();
     
-    double time = 0.0;
-    double dt = config.simulation.dt;
-    const double dt_min = 1e-8;
-    const double dt_max = config.simulation.dt * 5.0;
-    const int MAX_ITERS = 50; 
-    
-    int step = 0;
     ProgressBar progressBar(100, "[SIMULATION]");
     
-    while (time < config.simulation.total_time) {
+    // Remplacement du while(time < config.simulation.total_time) par le manager
+    while (!time_manager.is_finished()) {
         bool step_accepted = false;
         
         while (!step_accepted) {
-            // 1. Sauvegarde pour éventuel rollback
+            // 1. Sauvegarde pour éventuel rollback en cas de divergence
             save_previous_states();
 
             // 2. Tentative de résolution
-            int iters = compute_one_step_physics(time + dt, dt); 
+            double next_time = time_manager.get_time() + time_manager.get_dt();
+            int iters = compute_one_step_physics(next_time, time_manager.get_dt()); 
             
             // 3. Analyse du résultat
-            if (iters > 0 && iters <= MAX_ITERS) {
+            if (iters > 0) {
                 step_accepted = true;
-                time += dt;
-                step++;
                 
                 // On valide le pas de temps, les états "_current" deviennent les états "_n"
                 update_physics_history();
+                time_manager.advance_step();
+                time_manager.adapt_dt_after_success(); // Si implémentée
 
             } else {
-                // ÉCHEC : Rollback strict et réduction du pas de temps
-                Logger::warning("Non-convergence a t=" + std::to_string(time + dt) + ". Reduction de dt...");
-                
+                // ÉCHEC : Rollback strict et réduction du pas de temps géré par le manager
                 restore_previous_states();
-                dt *= 0.5;
-                
-                if (dt < dt_min) {
-                    throw std::runtime_error("Erreur fatale : dt est devenu trop petit (< dt_min) ! Rupture numerique.");
-                }
+                time_manager.adapt_dt_after_failure(); 
+                // Note : adapt_dt_after_failure() lèvera une exception si dt < dt_min
             }
         } 
 
-        // 4. Extraction des données
-        extract_and_save_results(time, step, initial_time);
+        // 4. Extraction des données déléguée au IOManager
+        io_manager.extract_and_save_results(
+            time_manager.get_time(), 
+            time_manager.get_step(), 
+            initial_time_str,
+            polarization, mechanics, fracture, electrostatics, material
+        );
 
         // 5. Mise à jour de l'interface
-        int progress = static_cast<int>((time / config.simulation.total_time) * 100.0);
+        int progress = static_cast<int>((time_manager.get_time() / config.simulation.total_time) * 100.0);
         progressBar.update(std::min(progress, 100), 0.0); 
     }
     
     progressBar.finish();
+    
+    // Forcer la dernière écriture du CSV si nécessaire
     diagnostics.write_csv(config.simulation.output_dir + "/energies_final.csv");
     
     if (config.chrono.run) { 
@@ -196,51 +193,20 @@ void Simulation::save_previous_states() {
     if (config.physics_toggle.mechanics) mechanics.save_previous_state();
     if (config.physics_toggle.fracture) fracture.save_previous_state();
     if (config.physics_toggle.polarization) polarization.save_previous_state();
-    if (config.physics_toggle.electrostatics) electrostatics.save_previous_state(); // Ajout essentiel
+    if (config.physics_toggle.electrostatics) electrostatics.save_previous_state();
 }
 
 void Simulation::restore_previous_states() {
     if (config.physics_toggle.mechanics) mechanics.restore_previous_state();
     if (config.physics_toggle.fracture) fracture.restore_previous_state();
     if (config.physics_toggle.polarization) polarization.restore_previous_state();
-    if (config.physics_toggle.electrostatics) electrostatics.restore_previous_state(); // Ajout essentiel
+    if (config.physics_toggle.electrostatics) electrostatics.restore_previous_state();
 }
 
 void Simulation::update_physics_history() {
-    // Cette fonction valide t_n, indispensable pour l'irréversibilité v_n (Algorithme 1, Ligne 11)
+    // Cette fonction valide t_n, indispensable pour l'irréversibilité v_n
     if (config.physics_toggle.mechanics) mechanics.update_history();
     if (config.physics_toggle.fracture) fracture.update_history();
     if (config.physics_toggle.polarization) polarization.update_history();
-    if (config.physics_toggle.electrostatics) electrostatics.update_history(); // Ajout essentiel
+    if (config.physics_toggle.electrostatics) electrostatics.update_history();
 }
-
-void Simulation::extract_and_save_results(double time, int step, const std::string& initial_time_str) {
-    diagnostics.record(time, time, polarization, mechanics, fracture, electrostatics, math);
-    diagnostics.append_csv(energy_csv_path);
-    diagnostics.compute_nodal_energies(polarization, mechanics, fracture, electrostatics, math);
-
-    // --- Projection nodale du tenseur des contraintes (pour diagnostic sigma_12) ---
-    if (config.physics_toggle.mechanics) {
-        mechanics.compute_stress_field(polarization, fracture, math);
-    }
-
-    if (step % config.simulation.save_frequency == 0) {
-        std::string filename = config.simulation.output_dir + "/VTK_" + initial_time_str + 
-                               "/multiphysics_results" + std::to_string(step / config.simulation.save_frequency) + ".vtk";            
-        
-        exporter.exportMultiPhysicsVTK(
-            filename, 
-            {"v", "phi", "Energy_Gradient", "Energy_Elastic", "Energy_Landau", "Energy_Electric", "Energy_Surface",
-             "sigma_xx", "sigma_yy", "sigma_xy"},                                   
-            {&fracture.get_v(), &electrostatics.get_phi(),
-             &diagnostics.get_U_nodal(), &diagnostics.get_W_nodal(), 
-             &diagnostics.get_chi_nodal(), &diagnostics.get_elec_nodal(), 
-             &diagnostics.get_surf_nodal(),
-             &mechanics.get_sigma_xx(), &mechanics.get_sigma_yy(), &mechanics.get_sigma_xy()}, 
-            {"P", "U", "E"}, 
-            {&polarization.get_Px(), &mechanics.get_ux(), &electrostatics.get_Ex()}, 
-            {&polarization.get_Py(), &mechanics.get_uy(), &electrostatics.get_Ey()}
-        );
-    }
-}
-

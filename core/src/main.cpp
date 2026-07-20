@@ -5,8 +5,9 @@
 #include "Mesh/MeshGeneratorGmsh.h"
 #include "IO/ResultsExporter.h"
 #include "Utils/Logger.h"
+#include "Physics/FerroelectricMaterial.h"
+#include "Physics/MaterialModel.h"
 #include <string>
-#include "Physics/Math.h"
 #include <iostream>
 #include <Eigen/Core>
 #include <cmath>
@@ -90,7 +91,7 @@ void test_paper_configuration(const Datafile& config, const Mesh& mesh) {
 // =========================================================================
 // 2. VÉRIFICATION DES DÉRIVÉES (APPEL DIRECT AUX MÉTHODES DE MATH.H)
 // =========================================================================
-void run_all_physics_tests(const Math& math, const Datafile& config) {
+void run_all_physics_tests(const MaterialModel& material, const Datafile& config) {
     std::cout << "========================================================\n";
     std::cout << "       VERIFICATION MULTIPHYSIQUE (Arias 2011)          \n";
     std::cout << "========================================================\n";
@@ -103,7 +104,7 @@ void run_all_physics_tests(const Math& math, const Datafile& config) {
     Eigen::Vector2d E(0.001, -0.002);
     
     double v = 0.5; // Endommagement partiel
-    double penalite = (v * v) + math.eta_k;
+    double penalite = (v * v) + material.get_eta_k();
     bool is_impermeable = true; // Mode testé
     
     double delta = 1e-6;
@@ -116,7 +117,7 @@ void run_all_physics_tests(const Math& math, const Datafile& config) {
     
     // Enthalpie totale H = penalite * W + chi - E.P (Modèle de ton Math.h)
     auto compute_H_tot = [&](const Eigen::Vector2d& p) {
-        return penalite * math.W_energy(p, strain) + math.chi_energy(p) - p.dot(E);
+        return penalite * material.W_energy(p, strain) + material.chi_energy(p) - p.dot(E);
     };
 
     double H_p1_plus  = compute_H_tot(P + Eigen::Vector2d(delta, 0));
@@ -128,7 +129,7 @@ void run_all_physics_tests(const Math& math, const Datafile& config) {
     double dH_dp2_FD  = (H_p2_plus - H_p2_minus) / (2.0 * delta);
 
     // On récupère les forces calculées par ta méthode :
-    GinzburgLandauTerms GL = math.compute_GL_terms(P, strain, E, penalite, is_impermeable);
+    GinzburgLandauTerms GL = material.compute_GL_terms(P, strain, E, penalite, is_impermeable);
 
     CHECK_TOLERANCE("Force Px (dH/dP1)", dH_dp1_FD, GL.force_px, tol);
     CHECK_TOLERANCE("Force Py (dH/dP2)", dH_dp2_FD, GL.force_py, tol);
@@ -139,13 +140,13 @@ void run_all_physics_tests(const Math& math, const Datafile& config) {
     std::cout << "\n--- 2. Jacobien de Ginzburg-Landau (J_11, J_22, J_12) ---\n";
     
     // Le Jacobien est la dérivée des forces. On rappelle math.compute_GL_terms avec FD.
-    auto GL_p1_plus  = math.compute_GL_terms(P + Eigen::Vector2d(delta, 0), strain, E, penalite, is_impermeable);
-    auto GL_p1_minus = math.compute_GL_terms(P - Eigen::Vector2d(delta, 0), strain, E, penalite, is_impermeable);
+    auto GL_p1_plus  = material.compute_GL_terms(P + Eigen::Vector2d(delta, 0), strain, E, penalite, is_impermeable);
+    auto GL_p1_minus = material.compute_GL_terms(P - Eigen::Vector2d(delta, 0), strain, E, penalite, is_impermeable);
     double J11_FD = (GL_p1_plus.force_px - GL_p1_minus.force_px) / (2.0 * delta);
     double J12_FD = (GL_p1_plus.force_py - GL_p1_minus.force_py) / (2.0 * delta);
 
-    auto GL_p2_plus  = math.compute_GL_terms(P + Eigen::Vector2d(0, delta), strain, E, penalite, is_impermeable);
-    auto GL_p2_minus = math.compute_GL_terms(P - Eigen::Vector2d(0, delta), strain, E, penalite, is_impermeable);
+    auto GL_p2_plus  = material.compute_GL_terms(P + Eigen::Vector2d(0, delta), strain, E, penalite, is_impermeable);
+    auto GL_p2_minus = material.compute_GL_terms(P - Eigen::Vector2d(0, delta), strain, E, penalite, is_impermeable);
     double J22_FD = (GL_p2_plus.force_py - GL_p2_minus.force_py) / (2.0 * delta);
 
     // On vérifie que ta matrice analytique correspond bien :
@@ -161,12 +162,13 @@ void run_all_physics_tests(const Math& math, const Datafile& config) {
     // FD par rapport à eps_11
     Eigen::Matrix2d strain_eps11_plus = strain; strain_eps11_plus(0,0) += delta;
     Eigen::Matrix2d strain_eps11_minus = strain; strain_eps11_minus(0,0) -= delta;
-    double dW_deps11_FD = (math.W_energy(P, strain_eps11_plus) - math.W_energy(P, strain_eps11_minus)) / (2.0 * delta);
+    double dW_deps11_FD = (material.W_energy(P, strain_eps11_plus) - material.W_energy(P, strain_eps11_minus)) / (2.0 * delta);
     
     // Dans Math.h, compute_sigma_0 ne renvoie que la partie piezo (couplage).
     // La contrainte totale est sigma_0 + C * eps.
-    Eigen::Vector3d sigma_0 = math.compute_sigma_0(P);
-    double sigma_11_total_analytic = sigma_0(0) + config.material.c1 * strain(0,0) + config.material.c2 * strain(1,1);
+    Eigen::Vector3d sigma_0 = material.compute_sigma_0(P);
+    Eigen::Matrix3d C = material.get_elastic_matrix();
+    double sigma_11_total_analytic = sigma_0(0) + C(0,0) * strain(0,0) + C(0,1) * strain(1,1);
     
     CHECK_TOLERANCE("Sigma 11 (dW/deps11)", dW_deps11_FD, sigma_11_total_analytic, tol);
 
@@ -179,6 +181,7 @@ int main(int argc, char* argv[]) {
         std::string config_file = (argc > 1) ? argv[1] : "../config.toml";
         
         Datafile config(config_file);
+        FerroelectricMaterial material(config.material);
         Logger::set_level(config.simulation.debug_enabled ? LogLevel::DEBUG : LogLevel::INFO);
         Logger::info("Configuration loaded from: " + config_file);
 
@@ -197,12 +200,13 @@ int main(int argc, char* argv[]) {
         // -----------------------------------------------------------
         // TESTS DE ROBUSTESSE ET DE VALIDATION PHYSIQUE
         // -----------------------------------------------------------
-        Math math_test(config);
         test_paper_configuration(config, mesh);
-        run_all_physics_tests(math_test, config);
+        // On passe directement l'instance de FerroelectricMaterial, qui hérite de MaterialModel
+        run_all_physics_tests(material, config);
         // -----------------------------------------------------------
         
-        Simulation sim(config, mesh, exporter);
+        // Retrait de 'material' des arguments car Simulation le génère en interne ou ne prend que 3 paramètres
+        Simulation sim(config, mesh, exporter, material);
         sim.initialize_physics();
         sim.run();
         

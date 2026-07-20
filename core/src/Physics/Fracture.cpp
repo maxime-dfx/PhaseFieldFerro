@@ -1,5 +1,6 @@
 #include "Physics/Fracture.h"
 #include "Physics/FractureAssembler.h"
+#include "Physics/MaterialModel.h"
 #include "Solvers/LinearSolver.h"
 #include "Utils/Logger.h"
 #include <omp.h>
@@ -105,12 +106,12 @@ double Fracture::calculer_distance_signee_precrack(double x, double y, const Pre
     return 1e6;
 }
 
-void Fracture::update_v(double dt_relax, const Polarization& polarization, const Mechanics& mechanics, const Electrostatics& electrostatics, const Math& math) {
+void Fracture::update_v(double dt_relax, const Polarization& polarization, const Mechanics& mechanics, const Electrostatics& electrostatics, const MaterialModel& material) {
     size_t n_nodes = mesh.get_num_nodes();
     Eigen::SparseMatrix<double> K_global(n_nodes, n_nodes);
     Eigen::VectorXd F_global = Eigen::VectorXd::Zero(n_nodes);
 
-    FractureAssembler::assemble_system(dt_relax, v_current, mesh, polarization, mechanics, electrostatics, math, config, K_global, F_global);
+    FractureAssembler::assemble_system(dt_relax, v_current, mesh, polarization, mechanics, electrostatics, material, config, K_global, F_global);
 
     Eigen::VectorXd v_new = LinearSolver::solve_with_guess(K_global, F_global, v_current, config.simulation.debug_enabled);
 

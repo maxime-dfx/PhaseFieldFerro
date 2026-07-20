@@ -8,7 +8,7 @@
 class Polarization;
 class Mechanics;
 class Electrostatics;
-class Math;
+class MaterialModel;
 
 class Fracture {
 private:
@@ -28,7 +28,7 @@ public:
     Fracture(const Datafile& config, const Mesh& mesh);
 
     void update_precrack_geometry(double time);
-    void update_v(double dt_relax, const Polarization& polarization, const Mechanics& mechanics, const Electrostatics& electrostatics, const Math& math);
+    void update_v(double dt_relax, const Polarization& polarization, const Mechanics& mechanics, const Electrostatics& electrostatics, const MaterialModel& material);
     void enforce_physical_bounds(const Eigen::VectorXd& v_new);
 
     double calculate_error() const;

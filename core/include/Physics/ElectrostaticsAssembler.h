@@ -7,7 +7,7 @@
 #include <array>
 #include "Physics/Polarization.h"
 #include "Physics/Fracture.h"
-#include "Physics/Math.h"
+#include "Physics/MaterialModel.h"
 #include "IO/Datafile.h"
 #include "Mesh/Mesh.h"
 #include "BC/BoundaryManager.h"
@@ -17,7 +17,7 @@ class ElectrostaticsAssembler {
 public:
     static void assemble_system(
         const Mesh& mesh, const Polarization& polarization, const Fracture& fracture, 
-        const Math& math, const Datafile& config, const std::vector<NodeBC>& bcs,
+        const MaterialModel& material, const Datafile& config, const std::vector<NodeBC>& bcs,
         Eigen::SparseMatrix<double>& K_global, Eigen::VectorXd& F_global);
 
 private:
@@ -25,7 +25,7 @@ private:
     static void calculer_matrices_elementaires(
         const Element& elem, const std::vector<std::array<double, 2>>& coords,
         const Polarization& polarization, const Fracture& fracture, 
-        const Math& math, const Datafile& config,
+        const MaterialModel& material, const Datafile& config,
         Eigen::Ref<Eigen::MatrixXd> K_local, Eigen::Ref<Eigen::VectorXd> F_local,
         Eigen::RowVectorXd& N_buffer, Eigen::MatrixXd& grad_N_buffer);
 

@@ -54,7 +54,7 @@ Ex_0 = 0.0
 Ey_0 = 0.0
 
 [fracture]
-mode = "PERMEABLE"
+mode = "IMPERMEABLE"
 
 # ==============================================================================
 # PARAMÈTRES MATÉRIAU - identiques a la Table 1 du papier (Abdollahi & Arias, 2011)

@@ -9,7 +9,7 @@
 class Fracture;
 class Mechanics;
 class Electrostatics;
-class Math;
+class MaterialModel;
 
 class Polarization {
 private:
@@ -28,7 +28,7 @@ private:
 public:
     Polarization(const Datafile& config, const Mesh& mesh, const BoundaryManager& bc_manager);
 
-    void update_P(double time, double dt_relax,  const Fracture& fracture, const Mechanics& mechanics, const Electrostatics& electrostatics, const Math& math);
+    void update_P(double time, double dt_relax,  const Fracture& fracture, const Mechanics& mechanics, const Electrostatics& electrostatics, const MaterialModel& material);
     void map_global_vector_to_components(const Eigen::VectorXd& P_new);
 
     double calculate_error() const;

@@ -1,5 +1,6 @@
 #include "Physics/Polarization.h"
 #include "Physics/PolarizationAssembler.h"
+#include "Physics/MaterialModel.h"
 #include "Solvers/LinearSolver.h"
 #include "Utils/Logger.h"
 #include <omp.h>
@@ -35,7 +36,7 @@ void Polarization::appliquer_conditions_initiales() {
     Py_n = Py_current;
 }
 
-void Polarization::update_P(double time, double dt_relax,  const Fracture& fracture, const Mechanics& mechanics, const Electrostatics& electrostatics, const Math& math)
+void Polarization::update_P(double time, double dt_relax,  const Fracture& fracture, const Mechanics& mechanics, const Electrostatics& electrostatics, const MaterialModel& material)
 {
     (void)time; 
     double dt = dt_relax;
@@ -47,7 +48,7 @@ void Polarization::update_P(double time, double dt_relax,  const Fracture& fract
 
     PolarizationAssembler::assemble_system(
         dt, Px_current, Py_current, Px_current, Py_current,
-        mesh, fracture, mechanics, electrostatics, math, config, bc_manager,
+        mesh, fracture, mechanics, electrostatics, material, config, bc_manager,
         K_global, F_global
     );
 

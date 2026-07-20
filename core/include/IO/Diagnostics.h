@@ -7,6 +7,7 @@
 
 #include "IO/Datafile.h"
 #include "Mesh/Mesh.h"
+#include "Physics/MaterialModel.h"
 
 class Polarization;
 class Mechanics;
@@ -41,7 +42,7 @@ public:
                          const Mechanics& mechanics,
                          const Fracture& fracture,
                          const Electrostatics& electrostatics,
-                         const Math& math);
+                            const MaterialModel& material);
 
     void write_csv(const std::string& path) const;
     void append_csv(const std::string& path);
@@ -54,7 +55,7 @@ public:
                                 const Mechanics& mechanics,
                                 const Fracture& fracture,
                                 const Electrostatics& electrostatics,
-                                const Math& math);
+                                const MaterialModel& material);
 
     const Eigen::VectorXd& get_U_nodal() const { return U_nodal; }
     const Eigen::VectorXd& get_W_nodal() const { return W_nodal; }
@@ -81,7 +82,7 @@ private:
                                const Mechanics& mechanics,
                                const Fracture& fracture,
                                const Electrostatics& electrostatics,
-                               const Math& math,
+                                  const MaterialModel& material,
                                EnergyRecord& rec) const;
 
     void integrate_surface_term(const Fracture& fracture, EnergyRecord& rec) const;
