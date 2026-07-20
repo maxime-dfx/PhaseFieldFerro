@@ -110,7 +110,7 @@ void Fracture::update_v(double dt_relax, const Polarization& polarization, const
     Eigen::SparseMatrix<double> K_global(n_nodes, n_nodes);
     Eigen::VectorXd F_global = Eigen::VectorXd::Zero(n_nodes);
 
-    FractureAssembler::assemble_system(dt_relax, v_n, mesh, polarization, mechanics, electrostatics, math, config, K_global, F_global);
+    FractureAssembler::assemble_system(dt_relax, v_current, mesh, polarization, mechanics, electrostatics, math, config, K_global, F_global);
 
     Eigen::VectorXd v_new = LinearSolver::solve_with_guess(K_global, F_global, v_current, config.simulation.debug_enabled);
 

@@ -46,7 +46,7 @@ void Polarization::update_P(double time, double dt_relax,  const Fracture& fract
     Eigen::VectorXd F_global = Eigen::VectorXd::Zero(system_size);
 
     PolarizationAssembler::assemble_system(
-        dt, Px_current, Py_current, Px_n, Py_n,
+        dt, Px_current, Py_current, Px_current, Py_current,
         mesh, fracture, mechanics, electrostatics, math, config, bc_manager,
         K_global, F_global
     );
