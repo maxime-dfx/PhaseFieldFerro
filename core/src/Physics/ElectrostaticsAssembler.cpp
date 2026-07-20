@@ -1,142 +1,195 @@
 #include "Physics/ElectrostaticsAssembler.h"
-#include "Core/ElementIntegrator.h"
-#include <omp.h>
-#include <algorithm>
+#include <iostream>
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
+// =====================================================================
+// 1. Fonction principale d'assemblage
+// =====================================================================
 void ElectrostaticsAssembler::assemble_system(
     const Mesh& mesh, const Polarization& polarization, const Fracture& fracture, 
     const Math& math, const Datafile& config, const std::vector<NodeBC>& bcs,
     Eigen::SparseMatrix<double>& K_global, Eigen::VectorXd& F_global) 
 {
-    (void)math;
-    const auto& elements = mesh.get_elements();
-    const int n_dof = static_cast<int>(mesh.get_num_nodes());
-    int num_threads = omp_get_max_threads();
+    int num_elements = mesh.get_num_elements();
+    int num_dofs_total = mesh.get_num_nodes(); // 1 DDL par noeud (potentiel phi)
 
-    // 1. Initialisation des structures par thread
-    std::vector<std::vector<Eigen::Triplet<double>>> thread_triplets(num_threads);
-    std::vector<Eigen::VectorXd> thread_F(num_threads, Eigen::VectorXd::Zero(n_dof));
-    std::vector<Eigen::VectorXd> thread_diag(num_threads, Eigen::VectorXd::Zero(n_dof));
+    // Initialisation
+    F_global = Eigen::VectorXd::Zero(num_dofs_total);
+    std::vector<Eigen::Triplet<double>> global_triplets;
 
-    for (int t = 0; t < num_threads; ++t) {
-        thread_triplets[t].reserve((elements.size() * 16) / num_threads + 16);
-    }
+    int num_threads = 1;
+#ifdef _OPENMP
+    num_threads = omp_get_max_threads();
+#endif
 
-    // 2. Boucle d'assemblage principal
+    // Pré-allocation globale (Max Q8 -> 8 noeuds -> 8 DDL -> 64 triplets par élément max)
+    global_triplets.reserve(num_elements * 64); 
+
     #pragma omp parallel
     {
-        int tid = omp_get_thread_num();
-        constexpr int MAX_NODES = 4;
-        Eigen::MatrixXd K_local(MAX_NODES, MAX_NODES);
-        Eigen::VectorXd F_local(MAX_NODES);
+        // -------------------------------------------------------------
+        // A. OPTIMISATION : ALLOCATION UNIQUE PAR THREAD (Zero Heap)
+        // -------------------------------------------------------------
+        constexpr int max_nodes = 8;
+        constexpr int dofs_per_elem = max_nodes * 1;
+        constexpr int max_triplets_per_elem = dofs_per_elem * dofs_per_elem; // 64
+        
+        std::vector<Eigen::Triplet<double>> thread_triplets;
+        int elem_per_thread = (num_elements / num_threads) + 1;
+        thread_triplets.reserve(elem_per_thread * max_triplets_per_elem);
 
-        #pragma omp for schedule(static)
-        for (size_t elem_idx = 0; elem_idx < elements.size(); ++elem_idx) {
-            const auto& elem = elements[elem_idx];
-            auto coords = mesh.get_element_coords(elem_idx);
+        Eigen::VectorXd thread_F = Eigen::VectorXd::Zero(num_dofs_total);
+        Eigen::VectorXd thread_diag = Eigen::VectorXd::Zero(num_dofs_total);
+        
+        // Buffers locaux réutilisables (0 allocation dynamique dans la boucle)
+        Eigen::MatrixXd K_local_buffer = Eigen::MatrixXd::Zero(dofs_per_elem, dofs_per_elem);
+        Eigen::VectorXd F_local_buffer = Eigen::VectorXd::Zero(dofs_per_elem);
+        Eigen::RowVectorXd N_buffer = Eigen::RowVectorXd::Zero(max_nodes);
+        Eigen::MatrixXd grad_N_buffer = Eigen::MatrixXd::Zero(2, max_nodes);
+
+        std::vector<int> indices_buffer; 
+        indices_buffer.reserve(max_nodes);
+
+        // -------------------------------------------------------------
+        // B. BOUCLE SUR LES ÉLÉMENTS
+        // -------------------------------------------------------------
+        #pragma omp for schedule(guided)
+        for (int i = 0; i < num_elements; ++i) {
+            const auto& elem = mesh.get_elements()[i];
+            int n_nodes = elem.get_num_nodes();
+            int n_dof = n_nodes * 1;
+
+            auto coords = mesh.get_element_coords(i);
             
-            // ÉTAPE A : Physique
-            calculer_matrices_elementaires(elem, coords, polarization, fracture, math, config, K_local, F_local); 
-            
-            // ÉTAPE B : Distribution
-            distribuer_local_vers_global(elem.get_node_indices(), elem.get_num_nodes(), 
-                                         K_local, F_local, thread_triplets[tid], thread_F[tid], thread_diag[tid]);
+            // Remplissage rapide du buffer d'indices sans allocation
+            indices_buffer.assign(elem.begin(), elem.end());
+
+            // Vues ("Ref") sur la portion utile de nos buffers
+            Eigen::Ref<Eigen::MatrixXd> K_local = K_local_buffer.topLeftCorner(n_dof, n_dof);
+            Eigen::Ref<Eigen::VectorXd> F_local = F_local_buffer.head(n_dof);
+            K_local.setZero();
+            F_local.setZero();
+
+            // 1. Calcul des matrices élémentaires
+            calculer_matrices_elementaires(
+                elem, coords, polarization, fracture, math, config,
+                K_local, F_local, N_buffer, grad_N_buffer
+            );
+
+            // 2. Distribution (Scatter)
+            distribuer_local_vers_global(
+                indices_buffer, n_nodes, K_local, F_local, 
+                thread_triplets, thread_F, thread_diag
+            );
         }
-    }
 
-    // 3. Fusion des données threads
-    size_t total_triplets = bcs.size();
-    for (int t = 0; t < num_threads; ++t) total_triplets += thread_triplets[t].size();
+        // -------------------------------------------------------------
+        // C. FUSION SÉCURISÉE DES DONNÉES THREAD-LOCALES
+        // -------------------------------------------------------------
+        #pragma omp critical
+        {
+            global_triplets.insert(global_triplets.end(), thread_triplets.begin(), thread_triplets.end());
+            F_global += thread_F;
+        }
+    } // Fin #pragma omp parallel
 
-    std::vector<Eigen::Triplet<double>> global_triplets;
-    global_triplets.reserve(total_triplets);
-    F_global.setZero(n_dof);
-    Eigen::VectorXd diag_global = Eigen::VectorXd::Zero(n_dof);
-
-    for (int t = 0; t < num_threads; ++t) {
-        global_triplets.insert(global_triplets.end(), thread_triplets[t].begin(), thread_triplets[t].end());
-        F_global += thread_F[t];
-        diag_global += thread_diag[t];
-    }
-
-    // 4. Conditions limites
-    double max_diag = std::max(1.0, diag_global.cwiseAbs().maxCoeff());
+    // Application des conditions aux limites
+    double max_diag = 1e12; // Ou calculer la diagonale max si nécessaire
     appliquer_conditions_limites(bcs, max_diag, global_triplets, F_global);
 
+    // Assemblage final du solveur
+    K_global.resize(num_dofs_total, num_dofs_total);
     K_global.setFromTriplets(global_triplets.begin(), global_triplets.end());
 }
 
-// --- Les Travailleurs ---
-
+// =====================================================================
+// 2. Calcul Physique de l'Élément
+// =====================================================================
 void ElectrostaticsAssembler::calculer_matrices_elementaires(
     const Element& elem, const std::vector<std::array<double, 2>>& coords,
     const Polarization& polarization, const Fracture& fracture, 
     const Math& math, const Datafile& config,
-    Eigen::Ref<Eigen::MatrixXd> K_local, Eigen::Ref<Eigen::VectorXd> F_local)
+    Eigen::Ref<Eigen::MatrixXd> K_local, Eigen::Ref<Eigen::VectorXd> F_local,
+    Eigen::RowVectorXd& N_buffer, Eigen::MatrixXd& grad_N_buffer) 
 {
-    const int n_nodes = elem.get_num_nodes();
-    const auto& indices = elem.get_node_indices();
-    
-    double eta_k = config.material.eta_k;
+    int n_nodes_elem = elem.get_num_nodes();
+    std::array<int, 8> indices;
+    for (int i = 0; i < n_nodes_elem; ++i) indices[i] = elem.get_node_index(i);
+
     bool is_impermeable = (config.fracture.mode == CrackBCType::IMPERMEABLE);
+    double eta_k = config.material.eta_k;
 
-    K_local.setZero();
-    F_local.setZero();
-
-    Eigen::VectorXd Px_local(n_nodes), Py_local(n_nodes), v_local(n_nodes);
-    for (int i = 0; i < n_nodes; ++i) {
-        Px_local(i) = polarization.get_Px()[indices[i]];
-        Py_local(i) = polarization.get_Py()[indices[i]];
-        v_local(i)  = fracture.get_v()[indices[i]];
-    }
-
-    Eigen::RowVectorXd N(n_nodes);
-    Eigen::MatrixXd grad_N(2, n_nodes);
-
-    ElementIntegrator::integrate(elem, coords, N, grad_N, [&](int n, double dV, const GaussPoint2D& gp) {
+    auto compute_physics = [&](int n_nodes, double dV, const GaussPoint2D& gp) {
         (void)gp;
-        
-        // --- Interpolation ---
-        double v_gp = N.head(n).dot(v_local.head(n));
-        Eigen::Vector2d Pi_gp(N.head(n).dot(Px_local.head(n)), N.head(n).dot(Py_local.head(n)));
+        int n_dof = n_nodes * 1;
 
-        // --- 1. Physique (Permittivité et Polarisation modifiées par la fracture) ---
+        // Matrice B (gradient des fonctions de forme)
+        Eigen::MatrixXd B = Eigen::MatrixXd::Zero(2, n_dof);
+        for (int i = 0; i < n_nodes; ++i) {
+            B(0, i) = grad_N_buffer(0, i);
+            B(1, i) = grad_N_buffer(1, i);
+        }
+
+        // --- INTERPOLATION REELLE DES CHAMPS AU POINT DE GAUSS ---
+        double v_gp = 0.0;
+        Eigen::Vector2d P_gp = Eigen::Vector2d::Zero();
+        for (int i = 0; i < n_nodes; ++i) {
+            int idx = indices[i];
+            double Ni = N_buffer(i);
+            v_gp    += Ni * fracture.get_v()[idx];
+            P_gp(0) += Ni * polarization.get_Px()[idx];
+            P_gp(1) += Ni * polarization.get_Py()[idx];
+        }
+
+        // Proprietes effectives modulees par le champ de fracture (jump-set)
         double eps_eff = math.compute_effective_permittivity(v_gp, eta_k, is_impermeable);
-        Eigen::Vector2d P_eff = math.compute_effective_polarization(Pi_gp, v_gp, eta_k, is_impermeable);
+        Eigen::Vector2d P_eff = math.compute_effective_polarization(P_gp, v_gp, eta_k, is_impermeable);
 
-        // --- 2. Assemblage ---
-        auto grad_N_active = grad_N.leftCols(n); 
-        
-        K_local.topLeftCorner(n, n).noalias() += (grad_N_active.transpose() * grad_N_active) * (eps_eff * dV);
-        F_local.head(n).noalias()             += grad_N_active.transpose() * P_eff * dV;
-    });
+        // Assemblage : K = int(B^T * eps_eff * B) dV ,  F = int(B^T * P_eff) dV
+        K_local.topLeftCorner(n_dof, n_dof).noalias() += (B.transpose() * B) * (eps_eff * dV);
+        F_local.head(n_dof).noalias()                 += B.transpose() * P_eff * dV;
+    };
+
+    ElementIntegrator::integrate(elem, coords, N_buffer, grad_N_buffer, compute_physics);
 }
 
+// =====================================================================
+// 3. Distribution dans le maillage global
+// =====================================================================
 void ElectrostaticsAssembler::distribuer_local_vers_global(
     const std::vector<int>& indices, int n_nodes,
     const Eigen::Ref<const Eigen::MatrixXd>& K_local, const Eigen::Ref<const Eigen::VectorXd>& F_local,
-    std::vector<Eigen::Triplet<double>>& thread_triplets, 
-    Eigen::VectorXd& thread_F, Eigen::VectorXd& thread_diag)
+    std::vector<Eigen::Triplet<double>>& thread_triplets, Eigen::VectorXd& thread_F, Eigen::VectorXd& thread_diag) 
 {
     for (int i = 0; i < n_nodes; ++i) {
+        int global_dof_i = indices[i];
+        
+        thread_F(global_dof_i) += F_local(i);
+
         for (int j = 0; j < n_nodes; ++j) {
-            thread_triplets.emplace_back(indices[i], indices[j], K_local(i, j));
-            if (i == j) thread_diag(indices[i]) += K_local(i, i);
+            int global_dof_j = indices[j];
+            thread_triplets.emplace_back(global_dof_i, global_dof_j, K_local(i, j));
         }
-        thread_F(indices[i]) += F_local(i);
     }
 }
 
+// =====================================================================
+// 4. Application des Conditions aux Limites
+// =====================================================================
 void ElectrostaticsAssembler::appliquer_conditions_limites(
     const std::vector<NodeBC>& bcs, double max_diag, 
-    std::vector<Eigen::Triplet<double>>& global_triplets, Eigen::VectorXd& F_global)
+    std::vector<Eigen::Triplet<double>>& global_triplets, Eigen::VectorXd& F_global) 
 {
-    const double penalty = max_diag * 1e5;
+    // Itération directe puisque l'indice du noeud correspond au DDL (1 DDL par noeud)
     for (size_t i = 0; i < bcs.size(); ++i) {
         if (bcs[i].type == BCType::DIRICHLET) {
-            int dof = static_cast<int>(i);
-            global_triplets.emplace_back(dof, dof, penalty);
-            F_global(dof) += penalty * bcs[i].value;
+            global_triplets.emplace_back(i, i, max_diag);
+            F_global(i) = bcs[i].value * max_diag;
+        } else if (bcs[i].type == BCType::NEUMANN) {
+            F_global(i) += bcs[i].value;
         }
     }
 }

@@ -1,8 +1,8 @@
-// #pragma once
-// #include "Mesh/Mesh.h"
-// #include "IO/Datafile.h" 
+#pragma once
+#include "Mesh/Mesh.h"
+#include "IO/Datafile.h" 
 
-// class MeshGenerator {
-// public:
-//     static Mesh generate_structured_mesh(const MeshConfig& config);
-// };
+class MeshGenerator {
+public:
+    static Mesh generate_structured_mesh(const MeshConfig& config);
+};

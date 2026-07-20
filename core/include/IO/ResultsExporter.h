@@ -6,8 +6,8 @@
 #include <map>
 #include <string>
 #include <vector>
-#include "Core/Mesh.h"
 #include <Eigen/Dense>
+#include "Mesh/Mesh.h"
 
 using namespace std;
 

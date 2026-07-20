@@ -10,8 +10,8 @@
 #include "Physics/Electrostatics.h"
 #include "Physics/Math.h"
 #include "IO/Datafile.h"
-#include "Core/Mesh.h"
-#include "Core/ElementIntegrator.h"
+#include "Mesh/Mesh.h"
+#include "FEM/ElementIntegrator.h"
 
 class FractureAssembler {
 public:
@@ -29,7 +29,8 @@ private:
         double dt, const Eigen::VectorXd& v_n,
         const Polarization& polarization, const Mechanics& mechanics,
         const Electrostatics& electrostatics, const Math& math, const Datafile& config,
-        Eigen::Ref<Eigen::MatrixXd> K_local, Eigen::Ref<Eigen::VectorXd> F_local);
+        Eigen::Ref<Eigen::MatrixXd> K_local, Eigen::Ref<Eigen::VectorXd> F_local,
+        Eigen::RowVectorXd& N_buffer, Eigen::MatrixXd& grad_N_buffer);
 
     static void distribuer_local_vers_global(
         const std::vector<int>& indices, int n_nodes,

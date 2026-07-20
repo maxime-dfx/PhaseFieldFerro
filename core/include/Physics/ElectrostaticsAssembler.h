@@ -9,9 +9,9 @@
 #include "Physics/Fracture.h"
 #include "Physics/Math.h"
 #include "IO/Datafile.h"
-#include "Core/Mesh.h"
-#include "Core/BoundaryManager.h"
-#include "Core/ElementIntegrator.h"
+#include "Mesh/Mesh.h"
+#include "BC/BoundaryManager.h"
+#include "FEM/ElementIntegrator.h"
 
 class ElectrostaticsAssembler {
 public:
@@ -25,8 +25,9 @@ private:
     static void calculer_matrices_elementaires(
         const Element& elem, const std::vector<std::array<double, 2>>& coords,
         const Polarization& polarization, const Fracture& fracture, 
-        const Math& math, const Datafile& config, 
-        Eigen::Ref<Eigen::MatrixXd> K_local, Eigen::Ref<Eigen::VectorXd> F_local);
+        const Math& math, const Datafile& config,
+        Eigen::Ref<Eigen::MatrixXd> K_local, Eigen::Ref<Eigen::VectorXd> F_local,
+        Eigen::RowVectorXd& N_buffer, Eigen::MatrixXd& grad_N_buffer);
 
     static void distribuer_local_vers_global(
         const std::vector<int>& indices, int n_nodes,

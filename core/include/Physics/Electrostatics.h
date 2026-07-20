@@ -4,8 +4,8 @@
 #include <Eigen/Core>
 #include <vector>
 #include "IO/Datafile.h"
-#include "Core/Mesh.h"
-#include "Core/BoundaryManager.h"
+#include "Mesh/Mesh.h"
+#include "BC/BoundaryManager.h"
 
 class Polarization;
 class Fracture;

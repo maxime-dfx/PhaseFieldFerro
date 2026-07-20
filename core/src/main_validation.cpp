@@ -1,12 +1,12 @@
 #include "Validation.h"
 #include "IO/Datafile.h"
 #include "Physics/Math.h"
-#include "Core/Mesh.h"
-#include "Core/MeshGenerator.h"
-#include "Core/BoundaryManager.h"
+#include "Mesh/Mesh.h"
+#include "Mesh/MeshGenerator.h"
+#include "BC/BoundaryManager.h"
 #include "Physics/Polarization.h"
 #include "Physics/Fracture.h"
-#include "Physics/Mechanics.h"       // INCLUSION AJOUTÉE
+#include "Physics/Mechanics.h"       
 #include "Physics/Electrostatics.h"
 #include <iostream>
 #include <cstdlib>

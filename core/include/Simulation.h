@@ -2,11 +2,11 @@
 
 #include <string>
 #include "IO/Datafile.h"
-#include "Core/Mesh.h"
+#include "Mesh/Mesh.h"
 #include "IO/ResultsExporter.h"
 #include "IO/Diagnostics.h"
 #include "Utils/Chrono.h"
-#include "Core/BoundaryManager.h"
+#include "BC/BoundaryManager.h"
 
 // Modules physiques
 #include "Physics/Math.h"

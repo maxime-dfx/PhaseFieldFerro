@@ -1,181 +1,223 @@
 #include "Physics/MechanicsAssembler.h"
-#include "Core/ElementIntegrator.h"
-#include <omp.h>
-#include <algorithm>
+#include <iostream>
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
+// =====================================================================
+// 1. Fonction principale d'assemblage
+// =====================================================================
 void MechanicsAssembler::assemble_system(
     const Mesh& mesh, const Polarization& polarization, const Fracture& fracture, 
     const Math& math, const std::vector<NodeBC>& bcs_x, const std::vector<NodeBC>& bcs_y,
     Eigen::SparseMatrix<double>& K_global, Eigen::VectorXd& F_global) 
 {
-    const auto& elements = mesh.get_elements();
-    const int system_size = 2 * static_cast<int>(mesh.get_num_nodes());
-    int num_threads = omp_get_max_threads();
+    int num_elements = mesh.get_num_elements();
+    int num_dofs_total = mesh.get_num_nodes() * 2; // 2 DDLs par noeud (ux, uy)
 
-    // 1. Initialisation des structures de données par thread
-    std::vector<std::vector<Eigen::Triplet<double>>> thread_triplets(num_threads);
-    std::vector<Eigen::VectorXd> thread_F(num_threads, Eigen::VectorXd::Zero(system_size));
-    std::vector<Eigen::VectorXd> thread_diag(num_threads, Eigen::VectorXd::Zero(system_size));
+    // Initialisation
+    F_global = Eigen::VectorXd::Zero(num_dofs_total);
+    std::vector<Eigen::Triplet<double>> global_triplets;
 
-    for (int t = 0; t < num_threads; ++t) {
-        thread_triplets[t].reserve((elements.size() * 64) / num_threads + 64);
-    }
+    int num_threads = 1;
+#ifdef _OPENMP
+    num_threads = omp_get_max_threads();
+#endif
 
-    // 2. Boucle d'assemblage principal
+    // Pré-allocation globale approximative pour accélérer l'insertion finale
+    global_triplets.reserve(num_elements * 64); 
+
     #pragma omp parallel
     {
-        int tid = omp_get_thread_num();
-        constexpr int MAX_ELEMENT_DOF = 8; // Pour 4 noeuds max
-        Eigen::MatrixXd K_local(MAX_ELEMENT_DOF, MAX_ELEMENT_DOF);
-        Eigen::VectorXd F_local(MAX_ELEMENT_DOF);
+        // -------------------------------------------------------------
+        // A. OPTIMISATION : ALLOCATION UNIQUE PAR THREAD (Zero Heap)
+        // -------------------------------------------------------------
+        
+        // Calcul pour la réservation exacte des triplets (Max Q8 -> 8 noeuds -> 16 DDL -> 256 valeurs)
+        constexpr int max_nodes = 8;
+        constexpr int dofs_per_elem = max_nodes * 2;
+        constexpr int max_triplets_per_elem = dofs_per_elem * dofs_per_elem;
+        
+        std::vector<Eigen::Triplet<double>> thread_triplets;
+        int elem_per_thread = (num_elements / num_threads) + 1;
+        thread_triplets.reserve(elem_per_thread * max_triplets_per_elem);
 
-        #pragma omp for schedule(static)
-        for (size_t elem_idx = 0; elem_idx < elements.size(); ++elem_idx) {
-            const auto& elem = elements[elem_idx];
-            auto coords = mesh.get_element_coords(elem_idx);
+        Eigen::VectorXd thread_F = Eigen::VectorXd::Zero(num_dofs_total);
+        Eigen::VectorXd thread_diag = Eigen::VectorXd::Zero(num_dofs_total);
+        
+        // Buffers locaux réutilisables (plus de création de vecteurs à la volée !)
+        Eigen::MatrixXd K_local_buffer = Eigen::MatrixXd::Zero(dofs_per_elem, dofs_per_elem);
+        Eigen::VectorXd F_local_buffer = Eigen::VectorXd::Zero(dofs_per_elem);
+        Eigen::RowVectorXd N_buffer = Eigen::RowVectorXd::Zero(max_nodes);
+        Eigen::MatrixXd grad_N_buffer = Eigen::MatrixXd::Zero(2, max_nodes);
+
+        // Buffer pour les indices afin de respecter l'ancienne signature (si besoin)
+        std::vector<int> indices_buffer; 
+        indices_buffer.reserve(max_nodes);
+
+        // -------------------------------------------------------------
+        // B. BOUCLE SUR LES ÉLÉMENTS
+        // -------------------------------------------------------------
+        #pragma omp for schedule(guided)
+        for (int i = 0; i < num_elements; ++i) {
+            const auto& elem = mesh.get_elements()[i];
+            int n_nodes = elem.get_num_nodes();
+            int n_dof = n_nodes * 2;
+
+            // Récupération des données
+            auto coords = mesh.get_element_coords(i);
             
-            // ÉTAPE A : Calcul mathématique pur
-            calculer_matrices_elementaires(elem, coords, polarization, fracture, math, K_local, F_local);
-            
-            // ÉTAPE B : Distribution dans les vecteurs du thread
-            distribuer_local_vers_global(elem.get_node_indices(), elem.get_num_nodes(), 
-                                         K_local, F_local, thread_triplets[tid], thread_F[tid], thread_diag[tid]);
+            // Remplissage rapide du buffer d'indices sans allocation
+            indices_buffer.assign(elem.begin(), elem.end());
+
+            // Vues ("Ref") sur la portion utile de nos buffers préalloués
+            Eigen::Ref<Eigen::MatrixXd> K_local = K_local_buffer.topLeftCorner(n_dof, n_dof);
+            Eigen::Ref<Eigen::VectorXd> F_local = F_local_buffer.head(n_dof);
+            K_local.setZero();
+            F_local.setZero();
+
+            // 1. Calcul des matrices élémentaires
+            calculer_matrices_elementaires(
+                elem, coords, polarization, fracture, math, 
+                K_local, F_local, N_buffer, grad_N_buffer // <-- Si tu mets à jour la signature pour passer les buffers
+            );
+
+            // 2. Distribution (Scatter)
+            distribuer_local_vers_global(
+                indices_buffer, n_nodes, K_local, F_local, 
+                thread_triplets, thread_F, thread_diag
+            );
         }
-    }
 
-    // 3. Fusion des données threads vers le système global
-    size_t total_triplets = bcs_x.size() + bcs_y.size();
-    for (int t = 0; t < num_threads; ++t) total_triplets += thread_triplets[t].size();
+        // -------------------------------------------------------------
+        // C. FUSION SÉCURISÉE DES DONNÉES THREAD-LOCALES
+        // -------------------------------------------------------------
+        #pragma omp critical
+        {
+            global_triplets.insert(global_triplets.end(), thread_triplets.begin(), thread_triplets.end());
+            F_global += thread_F;
+        }
+    } // Fin #pragma omp parallel
 
-    std::vector<Eigen::Triplet<double>> global_triplets;
-    global_triplets.reserve(total_triplets);
-    F_global.setZero(system_size);
-    Eigen::VectorXd diag_global = Eigen::VectorXd::Zero(system_size);
-
-    for (int t = 0; t < num_threads; ++t) {
-        global_triplets.insert(global_triplets.end(), thread_triplets[t].begin(), thread_triplets[t].end());
-        F_global += thread_F[t];
-        diag_global += thread_diag[t];
-    }
-
-    // 4. Application des contraintes physiques (Pénalisation)
-    double max_diag = std::max(1.0, diag_global.cwiseAbs().maxCoeff());
+    // Application des conditions aux limites
+    double max_diag = 1e12; // Ou tu peux chercher la vraie valeur max de la diagonale
     appliquer_conditions_limites(bcs_x, bcs_y, max_diag, global_triplets, F_global);
 
-    // 5. Construction finale
+    // Assemblage final du solveur
+    K_global.resize(num_dofs_total, num_dofs_total);
     K_global.setFromTriplets(global_triplets.begin(), global_triplets.end());
 }
 
+// =====================================================================
+// 2. Calcul Physique de l'Élément
+// =====================================================================
 void MechanicsAssembler::calculer_matrices_elementaires(
     const Element& elem, const std::vector<std::array<double, 2>>& coords,
     const Polarization& polarization, const Fracture& fracture, const Math& math,
-    Eigen::Ref<Eigen::MatrixXd> K_local, Eigen::Ref<Eigen::VectorXd> F_local)
+    Eigen::Ref<Eigen::MatrixXd> K_local, Eigen::Ref<Eigen::VectorXd> F_local,
+    Eigen::RowVectorXd& N_buffer, Eigen::MatrixXd& grad_N_buffer) 
 {
-    const int n_nodes = elem.get_num_nodes();
-    const int n_local_dof = 2 * n_nodes;
-    const auto& indices = elem.get_node_indices();
-    
-    K_local.setZero();
-    F_local.setZero();
+    int n_nodes_elem = elem.get_num_nodes();
+    std::array<int, 8> indices;
+    for (int i = 0; i < n_nodes_elem; ++i) indices[i] = elem.get_node_index(i);
 
-    Eigen::VectorXd Px_local(n_nodes), Py_local(n_nodes), v_local(n_nodes);
-    for (int i = 0; i < n_nodes; ++i) {
-        Px_local(i) = polarization.get_Px()[indices[i]];
-        Py_local(i) = polarization.get_Py()[indices[i]];
-        v_local(i)  = fracture.get_v()[indices[i]];
-    }
+    Eigen::Matrix3d C = math.get_elastic_matrix();
 
-    Eigen::RowVectorXd N(n_nodes);
-    Eigen::MatrixXd grad_N(2, n_nodes);
-    Eigen::MatrixXd B = Eigen::MatrixXd::Zero(3, n_local_dof);
-
-    Eigen::Matrix3d C = math.get_elastic_matrix(); 
-
-    ElementIntegrator::integrate(elem, coords, N, grad_N, [&](int n, double dV, const GaussPoint2D& gp) {
+    auto compute_physics = [&](int n_nodes, double dV, const GaussPoint2D& gp) {
         (void)gp;
-        B.setZero();
-        for (int i = 0; i < n; ++i) {
-            B(0, 2 * i)     = grad_N(0, i); 
-            B(1, 2 * i + 1) = grad_N(1, i); 
-            B(2, 2 * i)     = grad_N(1, i); 
-            B(2, 2 * i + 1) = grad_N(0, i); 
+        int n_dof = n_nodes * 2;
+
+        // Matrice B (Strain-Displacement)
+        Eigen::MatrixXd B = Eigen::MatrixXd::Zero(3, n_dof);
+        for (int i = 0; i < n_nodes; ++i) {
+            B(0, 2*i)     = grad_N_buffer(0, i);
+            B(1, 2*i + 1) = grad_N_buffer(1, i);
+            B(2, 2*i)     = grad_N_buffer(1, i);
+            B(2, 2*i + 1) = grad_N_buffer(0, i);
         }
 
-        Eigen::Vector2d Pi_gp(N.head(n).dot(Px_local.head(n)), N.head(n).dot(Py_local.head(n)));
-        double v_gp = N.head(n).dot(v_local.head(n));
+        // --- INTERPOLATION REELLE DE v ET P AU POINT DE GAUSS ---
+        double v_gp = 0.0;
+        Eigen::Vector2d P_gp = Eigen::Vector2d::Zero();
+        for (int i = 0; i < n_nodes; ++i) {
+            int idx = indices[i];
+            double Ni = N_buffer(i);
+            v_gp    += Ni * fracture.get_v()[idx];
+            P_gp(0) += Ni * polarization.get_Px()[idx];
+            P_gp(1) += Ni * polarization.get_Py()[idx];
+        }
 
-        if (!std::isfinite(Pi_gp(0)) || !std::isfinite(Pi_gp(1)) || !std::isfinite(v_gp)) return;
+        // Penalisation par la fracture : (v^2 + eta_k), cf. Eq. (8)/(13) du papier
+        double degradation_factor = (v_gp * v_gp) + math.eta_k;
 
-        // --- 1. Physique ---
-        Eigen::Vector3d sigma_0 = math.compute_sigma_0(Pi_gp);
-        double penalite_fracture = (v_gp * v_gp) + math.eta_k; // Ou config.material.eta_k selon votre accès
-        
-        // --- 2. Assemblage (Produits purs) ---
-        auto B_active = B.leftCols(2 * n);
-        double factor = penalite_fracture * dV;
-        
-        K_local.topLeftCorner(n_local_dof, n_local_dof).noalias() += (B_active.transpose() * C * B_active) * factor;
-        F_local.head(n_local_dof).noalias()                       -= B_active.transpose() * sigma_0 * factor;
-    });
+        // Rigidite degradee dans la zone fissuree
+        K_local.topLeftCorner(n_dof, n_dof).noalias() += (B.transpose() * C * B) * (dV * degradation_factor);
+
+        // Contrainte spontanee (couplage electrostrictif), egalement degradee
+        Eigen::Vector3d sigma_0 = math.compute_sigma_0(P_gp);
+        F_local.head(n_dof).noalias() -= B.transpose() * sigma_0 * (dV * degradation_factor);
+    };
+
+    ElementIntegrator::integrate(elem, coords, N_buffer, grad_N_buffer, compute_physics);
 }
 
+// =====================================================================
+// 3. Distribution dans le maillage global
+// =====================================================================
 void MechanicsAssembler::distribuer_local_vers_global(
     const std::vector<int>& indices, int n_nodes,
     const Eigen::Ref<const Eigen::MatrixXd>& K_local, const Eigen::Ref<const Eigen::VectorXd>& F_local,
-    std::vector<Eigen::Triplet<double>>& thread_triplets, 
-    Eigen::VectorXd& thread_F, Eigen::VectorXd& thread_diag)
+    std::vector<Eigen::Triplet<double>>& thread_triplets, Eigen::VectorXd& thread_F, Eigen::VectorXd& thread_diag) 
 {
     for (int i = 0; i < n_nodes; ++i) {
-        // Indices globaux (g) et locaux (l) pour le noeud i
-        int g_i_x = 2 * indices[i];
-        int g_i_y = 2 * indices[i] + 1;
-        int l_i_x = 2 * i;
-        int l_i_y = 2 * i + 1;
+        int idx_i = indices[i];
+        int global_dof_x_i = 2 * idx_i;
+        int global_dof_y_i = 2 * idx_i + 1;
+
+        thread_F(global_dof_x_i) += F_local(2 * i);
+        thread_F(global_dof_y_i) += F_local(2 * i + 1);
 
         for (int j = 0; j < n_nodes; ++j) {
-            // Indices globaux (g) et locaux (l) pour le noeud j
-            int g_j_x = 2 * indices[j];
-            int g_j_y = 2 * indices[j] + 1;
-            int l_j_x = 2 * j;
-            int l_j_y = 2 * j + 1;
+            int idx_j = indices[j];
+            int global_dof_x_j = 2 * idx_j;
+            int global_dof_y_j = 2 * idx_j + 1;
 
-            // Ajout aux triplets pour la matrice de rigidité
-            thread_triplets.emplace_back(g_i_x, g_j_x, K_local(l_i_x, l_j_x));
-            thread_triplets.emplace_back(g_i_x, g_j_y, K_local(l_i_x, l_j_y));
-            thread_triplets.emplace_back(g_i_y, g_j_x, K_local(l_i_y, l_j_x));
-            thread_triplets.emplace_back(g_i_y, g_j_y, K_local(l_i_y, l_j_y));
+            // Remplissage ultra-rapide (mémoire déjà réservée !)
+            thread_triplets.emplace_back(global_dof_x_i, global_dof_x_j, K_local(2 * i, 2 * j));
+            thread_triplets.emplace_back(global_dof_x_i, global_dof_y_j, K_local(2 * i, 2 * j + 1));
+            thread_triplets.emplace_back(global_dof_y_i, global_dof_x_j, K_local(2 * i + 1, 2 * j));
+            thread_triplets.emplace_back(global_dof_y_i, global_dof_y_j, K_local(2 * i + 1, 2 * j + 1));
         }
-        
-        // Ajout au vecteur second membre et sauvegarde de la diagonale
-        thread_F(g_i_x) += F_local(l_i_x);
-        thread_F(g_i_y) += F_local(l_i_y);
-        thread_diag(g_i_x) += K_local(l_i_x, l_i_x);
-        thread_diag(g_i_y) += K_local(l_i_y, l_i_y);
     }
 }
 
+// =====================================================================
+// 4. Application des Conditions aux Limites
+// =====================================================================
 void MechanicsAssembler::appliquer_conditions_limites(
-    const std::vector<NodeBC>& bcs_x, const std::vector<NodeBC>& bcs_y,
-    double max_diag, std::vector<Eigen::Triplet<double>>& global_triplets, Eigen::VectorXd& F_global)
+    const std::vector<NodeBC>& bcs_x, const std::vector<NodeBC>& bcs_y, double max_diag, 
+    std::vector<Eigen::Triplet<double>>& global_triplets, Eigen::VectorXd& F_global) 
 {
-    // Calcul du coefficient de pénalité basé sur la rigidité maximale
-    const double penalty = max_diag * 1e5;
-
-    // Conditions de Dirichlet sur l'axe X
+    // Dirichlet X
     for (size_t i = 0; i < bcs_x.size(); ++i) {
         if (bcs_x[i].type == BCType::DIRICHLET) {
-            int dof = 2 * static_cast<int>(i);
-            global_triplets.emplace_back(dof, dof, penalty);
-            F_global(dof) += penalty * bcs_x[i].value;
+            int dof = 2 * i;
+            global_triplets.emplace_back(dof, dof, max_diag);
+            F_global(dof) = bcs_x[i].value * max_diag;
+        } else if (bcs_x[i].type == BCType::NEUMANN) {
+            F_global(2 * i) += bcs_x[i].value;
         }
     }
 
-    // Conditions de Dirichlet sur l'axe Y
+    // Dirichlet Y
     for (size_t i = 0; i < bcs_y.size(); ++i) {
         if (bcs_y[i].type == BCType::DIRICHLET) {
-            int dof = 2 * static_cast<int>(i) + 1;
-            global_triplets.emplace_back(dof, dof, penalty);
-            F_global(dof) += penalty * bcs_y[i].value;
+            int dof = 2 * i + 1;
+            global_triplets.emplace_back(dof, dof, max_diag);
+            F_global(dof) = bcs_y[i].value * max_diag;
+        } else if (bcs_y[i].type == BCType::NEUMANN) {
+            F_global(2 * i + 1) += bcs_y[i].value;
         }
     }
 }

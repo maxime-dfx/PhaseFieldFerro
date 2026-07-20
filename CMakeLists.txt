@@ -29,11 +29,11 @@ find_path(GMSH_INCLUDE_DIR NAMES gmsh.h REQUIRED)
 # Architecture : Bibliothèque Centrale (CoreLib)
 # ==============================================================================
 set(CORE_SOURCES
-    core/src/Core/BoundaryManager.cpp 
+    core/src/BC/BoundaryManager.cpp 
 
-    core/src/Core/Mesh.cpp               
-    core/src/Core/MeshGenerator.cpp
-    core/src/Core/MeshGeneratorGmsh.cpp
+    core/src/Mesh/Mesh.cpp               
+    core/src/Mesh/MeshGenerator.cpp
+    core/src/Mesh/MeshGeneratorGmsh.cpp
 
     core/src/IO/Datafile.cpp
     core/src/IO/Diagnostics.cpp

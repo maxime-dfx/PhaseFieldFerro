@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "IO/Datafile.h"
-#include "Core/Mesh.h"
+#include "Mesh/Mesh.h"
 
 class Polarization;
 class Mechanics;

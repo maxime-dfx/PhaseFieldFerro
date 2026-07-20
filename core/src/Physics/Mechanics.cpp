@@ -3,9 +3,9 @@
 #include "Physics/Fracture.h"
 #include "Physics/MechanicsAssembler.h"
 #include "Solvers/LinearSolver.h"
-#include "Core/ShapeFunctions.h"
-#include "Core/ElementIntegrator.h"
-#include "Core/Types.h"
+#include "FEM/ShapeFunctions.h"
+#include "FEM/ElementIntegrator.h"
+#include "Utils/Types.h"
 #include "Utils/Logger.h"
 #include <omp.h>
 #include <cmath>
@@ -81,7 +81,9 @@ void Mechanics::restore_previous_state() { ux_current = ux_backup; uy_current = 
 void Mechanics::update_history() {}
 
 // ÉTAPE 2 : Le routeur principal pour les déformations
-Eigen::Matrix2d Mechanics::get_strain_at_gp(const Element& elem, const GaussPoint2D& gp, const std::vector<std::array<double, 2>>& coords) const {
+Eigen::Matrix2d Mechanics::get_strain_at_gp(const Element& elem, const GaussPoint2D& gp, 
+                                             const std::vector<std::array<double, 2>>& coords) const 
+{
     int n_nodes = elem.get_num_nodes();
 
     if (n_nodes == 3) {
@@ -93,65 +95,56 @@ Eigen::Matrix2d Mechanics::get_strain_at_gp(const Element& elem, const GaussPoin
     Logger::error("[Mechanics] Type d'element non supporte pour le calcul du tenseur des deformations");
     return Eigen::Matrix2d::Zero();
 }
+
 Eigen::Matrix2d Mechanics::get_stress_at_gp(const Element& elem, const GaussPoint2D& gp,
                                              const std::vector<std::array<double, 2>>& coords,
                                              const Polarization& polarization,
                                              const Fracture& fracture,
                                              const Math& math) const
 {
-    const auto& indices = elem.get_node_indices();
-    const int n_nodes = elem.get_num_nodes();
+    int n_nodes = elem.get_num_nodes();
+    std::array<int, 8> indices;
+    for (int i = 0; i < n_nodes; ++i) {
+        indices[i] = elem.get_node_index(i);
+    }
 
-    // 1. Déformation totale au point de Gauss (méthode existante)
+    // 1. Déformation totale
     Eigen::Matrix2d strain = get_strain_at_gp(elem, gp, coords);
 
-    // 2. Interpolation de P et v au point de Gauss
-    //    (on reproduit ici la même logique d'interpolation que dans les Assemblers)
-    Eigen::RowVectorXd N;
+    // 2. Interpolation des champs (P et v) au point de Gauss
+    // On utilise ShapeFunctions directement pour éviter les allocations dynamiques
+    Eigen::VectorXd N(n_nodes);
     if (n_nodes == 3) {
-        auto Nvec = ShapeFunctions::get_shape_functions_tri(1.0/3.0, 1.0/3.0); // ou coords du gp si dispo
-        N = Eigen::Map<Eigen::RowVectorXd>(Nvec.data(), static_cast<int>(Nvec.size()));
-    } else {
+        auto Nvec = ShapeFunctions::get_shape_functions_tri(gp.xi, gp.eta);
+        for(int i=0; i<3; ++i) N(i) = Nvec[i];
+    } else if (n_nodes == 4) {
         auto Narr = ShapeFunctions::get_shape_functions(gp.xi, gp.eta);
-        N = Eigen::Map<Eigen::RowVectorXd>(Narr.data(), static_cast<int>(Narr.size()));
-    }
+        for(int i=0; i<4; ++i) N(i) = Narr[i];
+    } // (Ajouter T6/Q8 si nécessaire)
 
     Eigen::Vector2d P_gp = Eigen::Vector2d::Zero();
-    double v_gp = 1.0;
+    double v_gp = 0.0;
+    
     for (int i = 0; i < n_nodes; ++i) {
-        P_gp(0) += N(i) * polarization.get_Px()[indices[i]];
-        P_gp(1) += N(i) * polarization.get_Py()[indices[i]];
-        v_gp    += (i == 0 ? -1.0 : 0.0); // placeholder, corrigé ci-dessous
-    }
-    // interpolation propre de v (on écrase le placeholder ci-dessus)
-    v_gp = 0.0;
-    for (int i = 0; i < n_nodes; ++i) {
-        v_gp += N(i) * fracture.get_v()[indices[i]];
+        int idx = indices[i];
+        P_gp(0) += N(i) * polarization.get_Px()[idx];
+        P_gp(1) += N(i) * polarization.get_Py()[idx];
+        v_gp    += N(i) * fracture.get_v()[idx];
     }
 
-    // 3. Contrainte spontanée (couplage électrostrictif)
+    // 3. Contrainte spontanée et élastique
     Eigen::Vector3d sigma_0_voigt = math.compute_sigma_0(P_gp);
-
-    // 4. Contrainte élastique pure en notation de Voigt : sigma = C : eps
     Eigen::Matrix3d C = math.get_elastic_matrix();
+    
     Eigen::Vector3d eps_voigt;
-    eps_voigt(0) = strain(0,0);
-    eps_voigt(1) = strain(1,1);
-    eps_voigt(2) = 2.0 * strain(0,1); // cisaillement ingénieur gamma_12 = 2*eps_12_tensoriel
+    eps_voigt << strain(0,0), strain(1,1), 2.0 * strain(0,1);
 
-    Eigen::Vector3d sigma_elastic_voigt = C * eps_voigt;
+    Eigen::Vector3d sigma_voigt = ((v_gp * v_gp) + config.material.eta_k) * (C * eps_voigt - sigma_0_voigt);
 
-    // 5. Contrainte physique totale, modulée par le jump-set de fracture
-    //    sigma = (v^2 + eta_k) * [C:eps - sigma_0(P)]   (cf. MechanicsAssembler)
-    double penalite_fracture = (v_gp * v_gp) + math.eta_k;
-    Eigen::Vector3d sigma_voigt = penalite_fracture * (sigma_elastic_voigt - sigma_0_voigt);
-
-    // 6. Conversion Voigt -> tenseur 2x2
+    // 4. Conversion Voigt -> Tenseur
     Eigen::Matrix2d sigma;
-    sigma(0,0) = sigma_voigt(0);
-    sigma(1,1) = sigma_voigt(1);
-    sigma(0,1) = sigma(1,0) = sigma_voigt(2); // sigma_12 = sigma_21, pas de facteur 2 en notation tensorielle
-
+    sigma << sigma_voigt(0), sigma_voigt(2), 
+             sigma_voigt(2), sigma_voigt(1);
     return sigma;
 }
 
@@ -168,7 +161,7 @@ void Mechanics::compute_stress_field(const Polarization& polarization, const Fra
     #pragma omp parallel
     {
         int tid = omp_get_thread_num();
-        constexpr int MAX_NODES = 4;
+        constexpr int MAX_NODES = 8; // Fixé à 8 pour supporter Q8/T6
         Eigen::RowVectorXd N_std(MAX_NODES);
         Eigen::MatrixXd grad_N(2, MAX_NODES);
 
@@ -176,17 +169,20 @@ void Mechanics::compute_stress_field(const Polarization& polarization, const Fra
         for (size_t elem_idx = 0; elem_idx < elements.size(); ++elem_idx) {
             const auto& elem = elements[elem_idx];
             auto coords = mesh.get_element_coords(elem_idx);
-            const auto& indices = elem.get_node_indices();
-            const int n = elem.get_num_nodes();
+            int n_nodes_elem = elem.get_num_nodes();
+            
+            std::array<int, 8> indices;
+            for (int i = 0; i < n_nodes_elem; ++i) {
+                indices[i] = elem.get_node_index(i);
+            }
 
             ElementIntegrator::integrate(elem, coords, N_std, grad_N, [&](int num_n, double dV, const GaussPoint2D& gp) {
                 Eigen::Matrix2d sigma = get_stress_at_gp(elem, gp, coords, polarization, fracture, math);
-
                 for (int i = 0; i < num_n; ++i) {
-                    thread_Fxx[tid](indices[i]) += sigma(0,0) * N_std[i] * dV;
-                    thread_Fyy[tid](indices[i]) += sigma(1,1) * N_std[i] * dV;
-                    thread_Fxy[tid](indices[i]) += sigma(0,1) * N_std[i] * dV;
-                    thread_M[tid](indices[i])   += N_std[i] * dV;
+                    thread_Fxx[tid](indices[i]) += sigma(0,0) * N_std(i) * dV;
+                    thread_Fyy[tid](indices[i]) += sigma(1,1) * N_std(i) * dV;
+                    thread_Fxy[tid](indices[i]) += sigma(0,1) * N_std(i) * dV;
+                    thread_M[tid](indices[i])   += N_std(i) * dV;
                 }
             });
         }
@@ -216,9 +212,11 @@ void Mechanics::compute_stress_field(const Polarization& polarization, const Fra
 
 // Travailleur A : Triangle
 Eigen::Matrix2d Mechanics::calculer_deformation_triangle(const Element& elem, const std::vector<std::array<double, 2>>& coords) const {
-    const auto& indices = elem.get_node_indices();
-    double eps_11 = 0.0, eps_22 = 0.0, eps_12 = 0.0;
+    int n_nodes = elem.get_num_nodes();
+    std::array<int, 8> indices;
+    for (int i = 0; i < n_nodes; ++i) indices[i] = elem.get_node_index(i);
 
+    double eps_11 = 0.0, eps_22 = 0.0, eps_12 = 0.0;
     auto [dN_xy, detJ] = ShapeFunctions::compute_physical_derivatives_tri(coords);
     if (!std::isfinite(detJ) || std::abs(detJ) <= 1e-12) return Eigen::Matrix2d::Zero();
     
@@ -236,10 +234,11 @@ Eigen::Matrix2d Mechanics::calculer_deformation_triangle(const Element& elem, co
 
 // Travailleur B : Quadrangle
 Eigen::Matrix2d Mechanics::calculer_deformation_quadrangle(const Element& elem, const GaussPoint2D& gp, const std::vector<std::array<double, 2>>& coords) const {
-    const auto& indices = elem.get_node_indices();
     int n_nodes = elem.get_num_nodes();
-    double eps_11 = 0.0, eps_22 = 0.0, eps_12 = 0.0;
+    std::array<int, 8> indices;
+    for (int i = 0; i < n_nodes; ++i) indices[i] = elem.get_node_index(i);
 
+    double eps_11 = 0.0, eps_22 = 0.0, eps_12 = 0.0;
     auto dN_xi_eta = ShapeFunctions::get_shape_function_gradients(gp.xi, gp.eta);
     auto [dN_xy, detJ] = ShapeFunctions::compute_physical_derivatives(coords, dN_xi_eta);
     if (!std::isfinite(detJ) || std::abs(detJ) <= 1e-12) return Eigen::Matrix2d::Zero();

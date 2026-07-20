@@ -1,8 +1,8 @@
 #include "Simulation.h"
 #include "IO/Datafile.h"
-#include "Core/Mesh.h"
-#include "Core/MeshGenerator.h" 
-#include "Core/MeshGeneratorGmsh.h"
+#include "Mesh/Mesh.h"
+#include "Mesh/MeshGenerator.h" 
+#include "Mesh/MeshGeneratorGmsh.h"
 #include "IO/ResultsExporter.h"
 #include "Utils/Logger.h"
 #include <string>

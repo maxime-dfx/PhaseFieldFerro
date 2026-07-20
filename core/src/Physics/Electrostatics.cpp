@@ -1,12 +1,13 @@
 #include "Physics/Electrostatics.h"
 #include "Physics/ElectrostaticsAssembler.h"
 #include "Solvers/LinearSolver.h"
-#include "Core/ShapeFunctions.h"
-#include "Core/ElementIntegrator.h"
+#include "FEM/ShapeFunctions.h"
+#include "FEM/ElementIntegrator.h"
 #include "Utils/Logger.h"
 #include <omp.h>
 #include <cmath>
 #include <cstdlib>
+#include <array>
 
 Electrostatics::Electrostatics(const Datafile& config, const Mesh& mesh, const BoundaryManager& bc_manager) 
     : config(config), mesh(mesh), bc_manager(bc_manager) 
@@ -15,10 +16,8 @@ Electrostatics::Electrostatics(const Datafile& config, const Mesh& mesh, const B
     phi_current.setZero(n_nodes);
     phi_prev_iter.setZero(n_nodes);
     phi_n.setZero(n_nodes);
-    
     Ex_current.setZero(n_nodes);
     Ey_current.setZero(n_nodes);
-
     appliquer_conditions_initiales();
 }
 
@@ -38,7 +37,6 @@ void Electrostatics::appliquer_conditions_initiales() {
 void Electrostatics::update_phi(double time, const Polarization& polarization, const Fracture& fracture, const Math& math) {
     (void)time; 
     size_t n_nodes = mesh.get_num_nodes();
-
     Eigen::SparseMatrix<double> K_global(n_nodes, n_nodes);
     Eigen::VectorXd F_global = Eigen::VectorXd::Zero(n_nodes);
 
@@ -55,10 +53,8 @@ void Electrostatics::update_phi(double time, const Polarization& polarization, c
 }
 
 void Electrostatics::compute_electric_field() {
-    // La méthode de projection L2 du champ électrique (inchangée car déjà très propre et spécifique)
     const auto& elements = mesh.get_elements();
     const size_t n_nodes = mesh.get_num_nodes();
-
     int num_threads = omp_get_max_threads();
     std::vector<Eigen::VectorXd> thread_Fx(num_threads, Eigen::VectorXd::Zero(n_nodes));
     std::vector<Eigen::VectorXd> thread_Fy(num_threads, Eigen::VectorXd::Zero(n_nodes));
@@ -67,30 +63,31 @@ void Electrostatics::compute_electric_field() {
     #pragma omp parallel
     {
         int tid = omp_get_thread_num();
-        constexpr int MAX_NODES = 4;
-        
+        constexpr int MAX_NODES = 8;
         Eigen::RowVectorXd N_std(MAX_NODES);
         Eigen::MatrixXd grad_N(2, MAX_NODES);
         Eigen::VectorXd phi_local(MAX_NODES);
+        std::array<int, 8> indices;
 
         #pragma omp for schedule(static)
         for (size_t elem_idx = 0; elem_idx < elements.size(); ++elem_idx) {
             const auto& elem = elements[elem_idx];
-            const int n = elem.get_num_nodes();
+            int n = elem.get_num_nodes();
             auto coords = mesh.get_element_coords(elem_idx);
-            const auto& indices = elem.get_node_indices();
-
-            for (int i = 0; i < n; ++i) phi_local(i) = phi_current(indices[i]);
+            
+            for(int i = 0; i < n; ++i) {
+                indices[i] = elem.get_node_index(i);
+                phi_local(i) = phi_current(indices[i]);
+            }
 
             ElementIntegrator::integrate(elem, coords, N_std, grad_N, [&](int num_n, double dV, const GaussPoint2D& gp) {
                 (void)gp;
                 double Ex_gp = -grad_N.row(0).head(num_n).dot(phi_local.head(num_n));
                 double Ey_gp = -grad_N.row(1).head(num_n).dot(phi_local.head(num_n));
-
                 for (int i = 0; i < num_n; ++i) {
-                    thread_Fx[tid](indices[i]) += Ex_gp * N_std[i] * dV;
-                    thread_Fy[tid](indices[i]) += Ey_gp * N_std[i] * dV;
-                    thread_M[tid](indices[i])  += N_std[i] * dV;
+                    thread_Fx[tid](indices[i]) += Ex_gp * N_std(i) * dV;
+                    thread_Fy[tid](indices[i]) += Ey_gp * N_std(i) * dV;
+                    thread_M[tid](indices[i])  += N_std(i) * dV;
                 }
             });
         }
@@ -134,18 +131,18 @@ double Electrostatics::get_Ey_at_gp(const Element& elem, const GaussPoint2D& gp)
 }
 
 double Electrostatics::calculer_champ_triangle(const Element& elem, const Eigen::VectorXd& champ_nodal) const {
-    const auto& indices = elem.get_node_indices();
+    int n = elem.get_num_nodes();
     double champ_val = 0.0;
     auto N = ShapeFunctions::get_shape_functions_tri(1.0/3.0, 1.0/3.0);
-    for(int i = 0; i < 3; ++i) champ_val += N[i] * champ_nodal[indices[i]];
+    for(int i = 0; i < n; ++i) champ_val += N[i] * champ_nodal[elem.get_node_index(i)];
     return champ_val;
 }
 
 double Electrostatics::calculer_champ_quadrangle(const Element& elem, const GaussPoint2D& gp, const Eigen::VectorXd& champ_nodal) const {
-    const auto& indices = elem.get_node_indices();
+    int n = elem.get_num_nodes();
     double champ_val = 0.0;
     auto N = ShapeFunctions::get_shape_functions(gp.xi, gp.eta);
-    for(int i = 0; i < 4; ++i) champ_val += N[i] * champ_nodal[indices[i]];
+    for(int i = 0; i < n; ++i) champ_val += N[i] * champ_nodal[elem.get_node_index(i)];
     return champ_val;
 }
 

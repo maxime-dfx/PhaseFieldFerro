@@ -4,7 +4,7 @@
 #include "Physics/Fracture.h"
 #include "Physics/Electrostatics.h"
 #include "Physics/Math.h"
-#include "Core/ElementIntegrator.h"
+#include "FEM/ElementIntegrator.h"
 #include <iostream>
 #include <iomanip>
 

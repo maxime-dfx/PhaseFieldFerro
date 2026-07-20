@@ -5,7 +5,7 @@
 #include <iostream>
 #include "Utils/toml.hpp"
 #include "Utils/Logger.h"
-#include "Core/Types.h"
+#include "Utils/Types.h"
 
 // ------------------------------------------------------------
 //  ENUMÉRATIONS 

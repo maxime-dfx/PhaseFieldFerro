@@ -5,7 +5,7 @@
 #include <functional>
 #include <string>
 #include <cmath>
-#include "Core/Mesh.h"
+#include "Mesh/Mesh.h"
 #include "IO/Datafile.h"
 
 enum class BCType { NEUMANN, DIRICHLET };

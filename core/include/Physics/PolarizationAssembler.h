@@ -10,9 +10,9 @@
 #include "Physics/Electrostatics.h"
 #include "Physics/Math.h"
 #include "IO/Datafile.h"
-#include "Core/Mesh.h"
-#include "Core/BoundaryManager.h"
-#include "Core/ElementIntegrator.h"
+#include "Mesh/Mesh.h"
+#include "BC/BoundaryManager.h"
+#include "FEM/ElementIntegrator.h"
 
 class PolarizationAssembler {
 public:
@@ -33,7 +33,8 @@ private:
         const Eigen::VectorXd& Px_n, const Eigen::VectorXd& Py_n,
         const Fracture& fracture, const Mechanics& mechanics,
         const Electrostatics& electrostatics, const Math& math, const Datafile& config,
-        Eigen::Ref<Eigen::MatrixXd> K_local, Eigen::Ref<Eigen::VectorXd> F_local);
+        Eigen::Ref<Eigen::MatrixXd> K_local, Eigen::Ref<Eigen::VectorXd> F_local,
+        Eigen::RowVectorXd& N_buffer, Eigen::MatrixXd& grad_N_buffer);
 
     static void distribuer_local_vers_global(
         const std::vector<int>& indices, int n_nodes,
