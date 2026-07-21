@@ -33,6 +33,7 @@ Mesh MeshGenerator::generate_structured_mesh(const MeshConfig& config) {
 
                 Element e;
                 e.node_indices = {n1, n2, n3, n4};
+                e.num_nodes = 4;     
                 e.ref_tag = tag;
                 elements.push_back(e);
             }

@@ -1,4 +1,4 @@
-#include "Simulation.h"
+#include "Simulation/Simulation.h"
 #include "Physics/MaterialModel.h"
 #include "Utils/Logger.h"
 #include "Utils/ProgressBar.h"
@@ -123,7 +123,11 @@ int Simulation::compute_one_step_physics(double time, double dt) {
 }
 
 // =========================================================================
-// BOUCLE TEMPORELLE ADAPTATIVE (ORCHESTRÉE PAR LE TIMEMANAGER)
+// BOUCLE TEMPORELLE - pas de temps FIXE (Algorithm 1, Abdollahi & Arias 2011)
+// n = 100 increments de charge, Delta t^n = 3e-2, sans rollback ni
+// adaptation de dt. La robustesse pres du saut instable de propagation est
+// geree par la boucle de Picard interne (tolerance / max_iter dans
+// compute_one_step_physics), pas par une reduction du pas de charge.
 // =========================================================================
 void Simulation::run() {
     if (config.chrono.run) chrono.start();
@@ -132,36 +136,23 @@ void Simulation::run() {
     
     ProgressBar progressBar(100, "[SIMULATION]");
     
-    // Remplacement du while(time < config.simulation.total_time) par le manager
     while (!time_manager.is_finished()) {
-        bool step_accepted = false;
-        
-        while (!step_accepted) {
-            // 1. Sauvegarde pour éventuel rollback en cas de divergence
-            save_previous_states();
+        double next_time = time_manager.get_time() + time_manager.get_dt();
+        int iters = compute_one_step_physics(next_time, time_manager.get_dt());
 
-            // 2. Tentative de résolution
-            double next_time = time_manager.get_time() + time_manager.get_dt();
-            int iters = compute_one_step_physics(next_time, time_manager.get_dt()); 
-            
-            // 3. Analyse du résultat
-            if (iters > 0) {
-                step_accepted = true;
-                
-                // On valide le pas de temps, les états "_current" deviennent les états "_n"
-                update_physics_history();
-                time_manager.advance_step();
-                time_manager.adapt_dt_after_success(); // Si implémentée
+        if (iters < 0) {
+            // Pas de rollback : comme dans le papier, on garde le meilleur
+            // etat obtenu apres MAX_ITER et on avance quand meme. On logue
+            // pour pouvoir remonter la tolerance / max_iter si ca arrive trop.
+            Logger::warning("Non-convergence a t=" + std::to_string(next_time) +
+                             " : etat non stabilise conserve, la charge avance quand meme.");
+        }
 
-            } else {
-                // ÉCHEC : Rollback strict et réduction du pas de temps géré par le manager
-                restore_previous_states();
-                time_manager.adapt_dt_after_failure(); 
-                // Note : adapt_dt_after_failure() lèvera une exception si dt < dt_min
-            }
-        } 
+        // On valide le pas : les etats "_current" deviennent les etats "_n"
+        update_physics_history();
+        time_manager.advance_step();
 
-        // 4. Extraction des données déléguée au IOManager
+        // Extraction des données déléguée au IOManager
         io_manager.extract_and_save_results(
             time_manager.get_time(), 
             time_manager.get_step(), 
@@ -169,7 +160,7 @@ void Simulation::run() {
             polarization, mechanics, fracture, electrostatics, material
         );
 
-        // 5. Mise à jour de l'interface
+        // Mise à jour de l'interface
         int progress = static_cast<int>((time_manager.get_time() / config.simulation.total_time) * 100.0);
         progressBar.update(std::min(progress, 100), 0.0); 
     }
@@ -188,20 +179,6 @@ void Simulation::run() {
 // =========================================================================
 // UTILITAIRES PRIVÉS DE GESTION D'ÉTAT
 // =========================================================================
-
-void Simulation::save_previous_states() {
-    if (config.physics_toggle.mechanics) mechanics.save_previous_state();
-    if (config.physics_toggle.fracture) fracture.save_previous_state();
-    if (config.physics_toggle.polarization) polarization.save_previous_state();
-    if (config.physics_toggle.electrostatics) electrostatics.save_previous_state();
-}
-
-void Simulation::restore_previous_states() {
-    if (config.physics_toggle.mechanics) mechanics.restore_previous_state();
-    if (config.physics_toggle.fracture) fracture.restore_previous_state();
-    if (config.physics_toggle.polarization) polarization.restore_previous_state();
-    if (config.physics_toggle.electrostatics) electrostatics.restore_previous_state();
-}
 
 void Simulation::update_physics_history() {
     // Cette fonction valide t_n, indispensable pour l'irréversibilité v_n

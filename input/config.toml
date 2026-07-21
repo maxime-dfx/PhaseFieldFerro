@@ -28,15 +28,17 @@ total_time = 3.0
 dt = 0.03
 dt_relax = 0.1
 save_frequency = 1            
-tolerance_ferro = 1e-3
-tolerance_vfield = 1e-3
+tolerance_ferro = 1e-1  
+tolerance_vfield = 1e-1
 max_iter = 100
 
 [mesh]
 calcul_mesh = false
 get_mesh_file = "../input/rectangle.msh"
-L_x = 200.0
-L_y = 200.0
+n_x = 3
+n_y = 3
+L_x = 2.0
+L_y = 2.0
 element_type = "TRIANGLE"
 
 [polarization]
