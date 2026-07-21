@@ -95,7 +95,7 @@ void FractureAssembler::assemble_system(
 // 2. Calcul Physique
 // =====================================================================
 void FractureAssembler::calculer_matrices_elementaires(
-    const Element& elem, const std::vector<std::array<double, 2>>& coords,
+    const Element& elem, const std::array<std::array<double, 2>, 8>& coords,
     double dt, const Eigen::VectorXd& v_n,
     const Polarization& polarization, const Mechanics& mechanics,
     const Electrostatics& electrostatics, const MaterialModel& material, const Datafile& config,

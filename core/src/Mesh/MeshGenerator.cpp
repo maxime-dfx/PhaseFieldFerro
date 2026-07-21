@@ -13,7 +13,6 @@ Mesh MeshGenerator::generate_structured_mesh(const MeshConfig& config) {
             Node node;
             node.x = i * config.dx;
             node.y = j * config.dy;
-            node.z = 0.0;
             node.ref_tag = 0; 
             nodes.push_back(node);
         }

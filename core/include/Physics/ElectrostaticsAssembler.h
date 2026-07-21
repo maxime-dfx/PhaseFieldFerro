@@ -23,7 +23,7 @@ public:
 private:
     // Nos fonctions spécialisées (Travailleurs)
     static void calculer_matrices_elementaires(
-        const Element& elem, const std::vector<std::array<double, 2>>& coords,
+        const Element& elem, const std::array<std::array<double, 2>, 8>& coords,
         const Polarization& polarization, const Fracture& fracture, 
         const MaterialModel& material, const Datafile& config,
         Eigen::Ref<Eigen::MatrixXd> K_local, Eigen::Ref<Eigen::VectorXd> F_local,

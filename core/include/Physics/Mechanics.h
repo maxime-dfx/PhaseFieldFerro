@@ -31,12 +31,12 @@ private:
 
     Eigen::Matrix2d calculer_deformation_triangle(
         const Element& elem, 
-        const std::vector<std::array<double, 2>>& coords) const;
+        const std::array<std::array<double, 2>, 8>& coords) const;
 
     Eigen::Matrix2d calculer_deformation_quadrangle(
         const Element& elem, 
         const GaussPoint2D& gp, 
-        const std::vector<std::array<double, 2>>& coords) const;
+        const std::array<std::array<double, 2>, 8>& coords) const;
 
 public:
     Mechanics(const Datafile& config, const Mesh& mesh, const BoundaryManager& bc_manager);
@@ -50,12 +50,18 @@ public:
     void restore_previous_state();
     void update_history();
 
-    Eigen::Matrix2d get_strain_at_gp(const Element& elem, const GaussPoint2D& gp, const std::vector<std::array<double, 2>>& coords) const;
-    Eigen::Matrix2d get_stress_at_gp(const Element& elem, const GaussPoint2D& gp,
-                                  const std::vector<std::array<double, 2>>& coords,
-                                  const Polarization& polarization,
-                                  const Fracture& fracture,
-                                  const MaterialModel& material) const;
+    Eigen::Matrix2d get_strain_at_gp(
+        const Element& elem, 
+        const GaussPoint2D& gp, 
+        const std::array<std::array<double, 2>, 8>& coords) const;
+
+    Eigen::Matrix2d get_stress_at_gp(
+        const Element& elem, 
+        const GaussPoint2D& gp,
+        const std::array<std::array<double, 2>, 8>& coords,
+        const Polarization& polarization,
+        const Fracture& fracture,
+        const MaterialModel& material) const;
     
     const Eigen::VectorXd& get_ux() const { return ux_current; }
     const Eigen::VectorXd& get_uy() const { return uy_current; }

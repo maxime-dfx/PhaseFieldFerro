@@ -82,8 +82,10 @@ void Mechanics::restore_previous_state() { ux_current = ux_backup; uy_current = 
 void Mechanics::update_history() {}
 
 // ÉTAPE 2 : Le routeur principal pour les déformations
-Eigen::Matrix2d Mechanics::get_strain_at_gp(const Element& elem, const GaussPoint2D& gp, 
-                                             const std::vector<std::array<double, 2>>& coords) const 
+Eigen::Matrix2d Mechanics::get_strain_at_gp(
+        const Element& elem, 
+        const GaussPoint2D& gp, 
+        const std::array<std::array<double, 2>, 8>& coords) const 
 {
     int n_nodes = elem.get_num_nodes();
 
@@ -97,11 +99,13 @@ Eigen::Matrix2d Mechanics::get_strain_at_gp(const Element& elem, const GaussPoin
     return Eigen::Matrix2d::Zero();
 }
 
-Eigen::Matrix2d Mechanics::get_stress_at_gp(const Element& elem, const GaussPoint2D& gp,
-                                             const std::vector<std::array<double, 2>>& coords,
-                                             const Polarization& polarization,
-                                             const Fracture& fracture,
-                                             const MaterialModel& material) const
+Eigen::Matrix2d Mechanics::get_stress_at_gp(
+        const Element& elem, 
+        const GaussPoint2D& gp,
+        const std::array<std::array<double, 2>, 8>& coords,
+        const Polarization& polarization,
+        const Fracture& fracture,
+        const MaterialModel& material) const
 {
     int n_nodes = elem.get_num_nodes();
     std::array<int, 8> indices;
@@ -212,7 +216,7 @@ void Mechanics::compute_stress_field(const Polarization& polarization, const Fra
 }
 
 // Travailleur A : Triangle
-Eigen::Matrix2d Mechanics::calculer_deformation_triangle(const Element& elem, const std::vector<std::array<double, 2>>& coords) const {
+Eigen::Matrix2d Mechanics::calculer_deformation_triangle(const Element& elem, const std::array<std::array<double, 2>, 8>& coords) const {
     int n_nodes = elem.get_num_nodes();
     std::array<int, 8> indices;
     for (int i = 0; i < n_nodes; ++i) indices[i] = elem.get_node_index(i);
@@ -234,7 +238,7 @@ Eigen::Matrix2d Mechanics::calculer_deformation_triangle(const Element& elem, co
 }
 
 // Travailleur B : Quadrangle
-Eigen::Matrix2d Mechanics::calculer_deformation_quadrangle(const Element& elem, const GaussPoint2D& gp, const std::vector<std::array<double, 2>>& coords) const {
+Eigen::Matrix2d Mechanics::calculer_deformation_quadrangle(const Element& elem, const GaussPoint2D& gp, const std::array<std::array<double, 2>, 8>& coords) const {
     int n_nodes = elem.get_num_nodes();
     std::array<int, 8> indices;
     for (int i = 0; i < n_nodes; ++i) indices[i] = elem.get_node_index(i);

@@ -35,7 +35,7 @@ void ResultsExporter::exportToMesh(const std::string& filename) {
     auto nodes = m_mesh.get_nodes();
     out << "Vertices\n" << nodes.size() << "\n";
     for (const auto& node : nodes) {
-        out << node.x << " " << node.y << " " << node.z << " " << node.ref_tag << "\n";
+        out << node.x << " " << node.y << " "  << node.ref_tag << "\n";
     }
     out << "\n";
 
@@ -87,7 +87,7 @@ void ResultsExporter::exportScalarVTK(const std::string& filename,
     auto nodes = m_mesh.get_nodes();
     out << "POINTS " << nodes.size() << " double\n";
     for (const auto& node : nodes) {
-        out << node.x << " " << node.y << " " << node.z << "\n";
+        out << node.x << " " << node.y << "\n";
     }
 
     if (m_mesh.get_element_type() == ElementType::TRIANGLE3) {
@@ -167,7 +167,7 @@ void ResultsExporter::exportVectorVTK(const std::string& filename,
     auto nodes = m_mesh.get_nodes();
     out << "POINTS " << nodes.size() << " double\n";
     for (const auto& node : nodes) {
-        out << node.x << " " << node.y << " " << node.z << "\n";
+        out << node.x << " " << node.y << "\n";
     }
 
     if (m_mesh.get_element_type() == ElementType::TRIANGLE3) {
@@ -273,10 +273,8 @@ void ResultsExporter::exportMultiPhysicsVTK(const std::string& filename,
     for (const auto& node : nodes) {
         double x_swap = swap_double(node.x);
         double y_swap = swap_double(node.y);
-        double z_swap = swap_double(node.z);
         out.write(reinterpret_cast<const char*>(&x_swap), sizeof(double));
         out.write(reinterpret_cast<const char*>(&y_swap), sizeof(double));
-        out.write(reinterpret_cast<const char*>(&z_swap), sizeof(double));
     }
     out << "\n"; 
 

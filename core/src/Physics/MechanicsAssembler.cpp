@@ -113,7 +113,7 @@ void MechanicsAssembler::assemble_system(
 // 2. Calcul Physique de l'Élément
 // =====================================================================
 void MechanicsAssembler::calculer_matrices_elementaires(
-    const Element& elem, const std::vector<std::array<double, 2>>& coords,
+    const Element& elem, const std::array<std::array<double, 2>, 8>& coords,
     const Polarization& polarization, const Fracture& fracture, const MaterialModel& material,
     Eigen::Ref<Eigen::MatrixXd> K_local, Eigen::Ref<Eigen::VectorXd> F_local,
     Eigen::RowVectorXd& N_buffer, Eigen::MatrixXd& grad_N_buffer) 

@@ -3,10 +3,11 @@
 #include <array>
 #include <cassert>
 #include <cstddef>
+#include <unordered_map>
 #include "Utils/Types.h"
 
 struct Node {
-    double x, y, z;
+    double x, y; // z supprimé pour optimisation de la mémoire cache en 2D
     int ref_tag;
 };
 
@@ -38,6 +39,9 @@ private:
     
     std::vector<Node> m_nodes;
     std::vector<Element> m_elements;
+    
+    // Cache pour l'accès O(1) sans copie des noeuds de bord
+    std::unordered_map<int, std::vector<int>> m_boundary_nodes_cache;
 
 public:
     Mesh(double Lx, double Ly, int nx, int ny, ElementType type, 
@@ -59,8 +63,9 @@ public:
     
     int get_num_elements() const { return static_cast<int>(m_elements.size()); }
     int get_num_nodes() const { return static_cast<int>(m_nodes.size()); }
-
-    std::vector<int> get_boundary_nodes(int edge_id) const;
-    std::vector<std::array<double, 2>> get_element_coords(int elem_index) const;
+    
+    // Nouvelles signatures ultra-rapides
+    const std::vector<int>& get_boundary_nodes(int edge_id) const;
+    std::array<std::array<double, 2>, 8> get_element_coords(int elem_index) const;
     std::array<double, 2> get_node_coords(size_t node_index) const;
 };

@@ -59,8 +59,7 @@ Mesh MeshGeneratorGmsh::load_from_msh(const std::string& msh_path, double Lx, do
                 Node node;
                 node.x = x;
                 node.y = y;
-                node.z = 0.0;
-                node.ref_tag = 0; 
+                    node.ref_tag = 0; 
                 gmsh_id_to_local[id] = static_cast<int>(nodes.size());
                 nodes.push_back(node);
             }

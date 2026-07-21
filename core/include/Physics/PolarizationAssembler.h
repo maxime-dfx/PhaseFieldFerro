@@ -28,7 +28,7 @@ public:
 private:
     // --- Les Travailleurs ---
     static void calculer_matrices_elementaires(
-        const Element& elem, const std::vector<std::array<double, 2>>& coords,
+        const Element& elem, const std::array<std::array<double, 2>, 8>& coords,
         double dt, const Eigen::VectorXd& Px_current, const Eigen::VectorXd& Py_current,
         const Eigen::VectorXd& Px_n, const Eigen::VectorXd& Py_n,
         const Fracture& fracture, const Mechanics& mechanics,

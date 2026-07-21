@@ -47,8 +47,8 @@ public:
 
     // --- AJOUTS : CALCULATEURS DE DÉRIVÉES PHYSIQUES ---
 
-    static std::pair<std::vector<std::array<double,2>>, double>
-    compute_physical_derivatives_tri(const std::vector<std::array<double,2>>& coords) {
+    static std::pair<std::array<std::array<double,2>, 3>, double>
+    compute_physical_derivatives_tri(const std::array<std::array<double,2>, 8>& coords) {
         auto dN_xi_eta = get_shape_function_gradients_tri();
         double dx_dxi = 0, dy_dxi = 0, dx_deta = 0, dy_deta = 0;
         for (int i = 0; i < 3; ++i) {
@@ -58,7 +58,7 @@ public:
             dy_deta += dN_xi_eta[1][i] * coords[i][1];
         }
         double detJ = dx_dxi * dy_deta - dx_deta * dy_dxi;
-        std::vector<std::array<double,2>> dN_xy(3);
+        std::array<std::array<double,2>, 3> dN_xy;
         for (int i = 0; i < 3; ++i) {
             dN_xy[i][0] = ( dy_deta * dN_xi_eta[0][i] - dy_dxi * dN_xi_eta[1][i]) / detJ;
             dN_xy[i][1] = (-dx_deta * dN_xi_eta[0][i] + dx_dxi * dN_xi_eta[1][i]) / detJ;
@@ -68,7 +68,7 @@ public:
 
     template<size_t N>
     static std::pair<std::array<std::array<double,N>,2>, double>
-    compute_physical_derivatives(const std::vector<std::array<double,2>>& coords,
+    compute_physical_derivatives(const std::array<std::array<double, 2>, 8>& coords, 
                                  const std::array<std::array<double,N>,2>& dN_xi_eta) {
         double dx_dxi = 0, dy_dxi = 0, dx_deta = 0, dy_deta = 0;
         for (size_t i = 0; i < N; ++i) {
