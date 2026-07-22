@@ -8,6 +8,7 @@
 /data/vtk/
 /data/logs/
 /results/
+/Tracy/
 
 # IDE et fichiers système
 .vscode/
