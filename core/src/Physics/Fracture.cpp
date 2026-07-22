@@ -107,15 +107,33 @@ double Fracture::calculer_distance_signee_precrack(double x, double y, const Pre
 }
 
 void Fracture::update_v(double dt_relax, const Polarization& polarization, const Mechanics& mechanics, const Electrostatics& electrostatics, const MaterialModel& material) {
+    ZoneScoped;
     size_t n_nodes = mesh.get_num_nodes();
     Eigen::SparseMatrix<double> K_global(n_nodes, n_nodes);
     Eigen::VectorXd F_global = Eigen::VectorXd::Zero(n_nodes);
 
     FractureAssembler::assemble_system(dt_relax, v_current, mesh, polarization, mechanics, electrostatics, material, config, K_global, F_global);
 
-    Eigen::VectorXd v_new = LinearSolver::solve_with_guess(K_global, F_global, v_current, config.simulation.debug_enabled);
+    // 1. Analyse symbolique (exécutée une seule fois au tout premier appel)
+    if (!m_is_pattern_analyzed) {
+        m_cholmod_solver.analyzePattern(K_global);
+        if (m_cholmod_solver.info() != Eigen::Success) {
+            Logger::error("[Fracture] Echec de l'analyse symbolique CHOLMOD !");
+        }
+        m_is_pattern_analyzed = true;
+    }
 
-    if (v_new.allFinite()) {
+    // 2. Factorisation numérique (rapide à chaque itération)
+    m_cholmod_solver.factorize(K_global);
+    if (m_cholmod_solver.info() != Eigen::Success) {
+        Logger::error("[Fracture] Echec de la factorisation CHOLMOD !");
+    }
+
+    // 3. Résolution directe via le cache
+    Eigen::VectorXd v_new = m_cholmod_solver.solve(F_global);
+
+    // 4. Vérification et mise à jour
+    if (m_cholmod_solver.info() == Eigen::Success && v_new.allFinite()) {
         enforce_physical_bounds(v_new);
     } else {
         Logger::error("[Fracture] Echec resolution ou solution non finie");

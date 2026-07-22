@@ -1,8 +1,10 @@
 #include "Physics/ElectrostaticsAssembler.h"
 #include <iostream>
+#include <tracy/Tracy.hpp>
 
 #ifdef _OPENMP
 #include <omp.h>
+
 #endif
 
 // =====================================================================
@@ -13,23 +15,28 @@ void ElectrostaticsAssembler::assemble_system(
     const MaterialModel& material, const Datafile& config, const std::vector<NodeBC>& bcs,
     Eigen::SparseMatrix<double>& K_global, Eigen::VectorXd& F_global) 
 {
+    ZoneScoped;
     int num_elements = mesh.get_num_elements();
     int num_dofs_total = mesh.get_num_nodes(); // 1 DDL par noeud (potentiel phi)
 
     // Initialisation
     F_global = Eigen::VectorXd::Zero(num_dofs_total);
-    std::vector<Eigen::Triplet<double>> global_triplets;
 
     int num_threads = 1;
 #ifdef _OPENMP
     num_threads = omp_get_max_threads();
 #endif
 
-    // Pré-allocation globale (Max Q8 -> 8 noeuds -> 8 DDL -> 64 triplets par élément max)
-    global_triplets.reserve(num_elements * 64); 
+    // Tableaux de stockage thread-locaux pour supprimer le #pragma omp critical
+    std::vector<std::vector<Eigen::Triplet<double>>> thread_triplets_array(num_threads);
+    std::vector<Eigen::VectorXd> thread_F_array(num_threads, Eigen::VectorXd::Zero(num_dofs_total));
 
     #pragma omp parallel
     {
+        int tid = omp_get_thread_num();
+        auto& thread_triplets = thread_triplets_array[tid];
+        auto& thread_F = thread_F_array[tid];
+
         // -------------------------------------------------------------
         // A. OPTIMISATION : ALLOCATION UNIQUE PAR THREAD (Zero Heap)
         // -------------------------------------------------------------
@@ -37,12 +44,10 @@ void ElectrostaticsAssembler::assemble_system(
         constexpr int dofs_per_elem = max_nodes * 1;
         constexpr int max_triplets_per_elem = dofs_per_elem * dofs_per_elem; // 64
         
-        std::vector<Eigen::Triplet<double>> thread_triplets;
         int elem_per_thread = (num_elements / num_threads) + 1;
         thread_triplets.reserve(elem_per_thread * max_triplets_per_elem);
 
-        Eigen::VectorXd thread_F = Eigen::VectorXd::Zero(num_dofs_total);
-        Eigen::VectorXd thread_diag = Eigen::VectorXd::Zero(num_dofs_total);
+        Eigen::VectorXd thread_diag = Eigen::VectorXd::Zero(num_dofs_total); // Local dummy pour l'appel
         
         // Buffers locaux réutilisables (0 allocation dynamique dans la boucle)
         Eigen::MatrixXd K_local_buffer = Eigen::MatrixXd::Zero(dofs_per_elem, dofs_per_elem);
@@ -54,7 +59,7 @@ void ElectrostaticsAssembler::assemble_system(
         indices_buffer.reserve(max_nodes);
 
         // -------------------------------------------------------------
-        // B. BOUCLE SUR LES ÉLÉMENTS
+        // B. BOUCLE SUR LES ÉLÉMENTS (100% Parallèle, Zéro Verrou)
         // -------------------------------------------------------------
         #pragma omp for schedule(guided)
         for (int i = 0; i < num_elements; ++i) {
@@ -85,16 +90,25 @@ void ElectrostaticsAssembler::assemble_system(
                 thread_triplets, thread_F, thread_diag
             );
         }
+    } // Fin #pragma omp parallel (synchronisation implicite)
 
-        // -------------------------------------------------------------
-        // C. FUSION SÉCURISÉE DES DONNÉES THREAD-LOCALES
-        // -------------------------------------------------------------
-        #pragma omp critical
-        {
-            global_triplets.insert(global_triplets.end(), thread_triplets.begin(), thread_triplets.end());
-            F_global += thread_F;
-        }
-    } // Fin #pragma omp parallel
+    // -------------------------------------------------------------
+    // C. FUSION SÉQUENTIELLE HORS PARALLÉLISME (Ultra-rapide)
+    // -------------------------------------------------------------
+    size_t total_triplets = 0;
+    for (int t = 0; t < num_threads; ++t) {
+        total_triplets += thread_triplets_array[t].size();
+    }
+
+    std::vector<Eigen::Triplet<double>> global_triplets;
+    global_triplets.reserve(total_triplets);
+
+    for (int t = 0; t < num_threads; ++t) {
+        global_triplets.insert(global_triplets.end(), 
+                               thread_triplets_array[t].begin(), 
+                               thread_triplets_array[t].end());
+        F_global += thread_F_array[t];
+    }
 
     // Application des conditions aux limites
     double max_diag = 1e12; // Ou calculer la diagonale max si nécessaire
@@ -115,6 +129,7 @@ void ElectrostaticsAssembler::calculer_matrices_elementaires(
     Eigen::Ref<Eigen::MatrixXd> K_local, Eigen::Ref<Eigen::VectorXd> F_local,
     Eigen::RowVectorXd& N_buffer, Eigen::MatrixXd& grad_N_buffer) 
 {
+    ZoneScoped;
     int n_nodes_elem = elem.get_num_nodes();
     std::array<int, 8> indices;
     for (int i = 0; i < n_nodes_elem; ++i) indices[i] = elem.get_node_index(i);

@@ -1,6 +1,7 @@
 #pragma once
 #include "Mesh/Mesh.h"
 #include "FEM/ReferenceElement.h"
+#include <tracy/Tracy.hpp>
 #include <Eigen/Dense>
 #include <cmath>
 #include <array>
@@ -15,6 +16,7 @@ private:
                                Eigen::MatrixXd& grad_N_buffer,
                                Func&& compute_physics) 
     {
+        ZoneScoped;
         constexpr int n_nodes = RefElem::get_num_nodes();
         
         std::array<double, 8> N_local;

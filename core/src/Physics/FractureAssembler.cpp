@@ -1,5 +1,6 @@
 #include "Physics/FractureAssembler.h"
 #include <iostream>
+#include <tracy/Tracy.hpp>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -15,33 +16,36 @@ void FractureAssembler::assemble_system(
     const Datafile& config, Eigen::SparseMatrix<double>& K_global, 
     Eigen::VectorXd& F_global) 
 {
+    ZoneScoped;
     int num_elements = mesh.get_num_elements();
     int num_dofs_total = mesh.get_num_nodes(); // 1 DDL par noeud (champ v)
 
     F_global = Eigen::VectorXd::Zero(num_dofs_total);
-    std::vector<Eigen::Triplet<double>> global_triplets;
 
     int num_threads = 1;
 #ifdef _OPENMP
     num_threads = omp_get_max_threads();
 #endif
 
-    // Pré-allocation : 64 triplets max par élément (Q8 -> 8 noeuds -> 64 interactions)
-    global_triplets.reserve(num_elements * 64); 
+    // Tableaux de stockage thread-locaux pour supprimer le #pragma omp critical
+    std::vector<std::vector<Eigen::Triplet<double>>> thread_triplets_array(num_threads);
+    std::vector<Eigen::VectorXd> thread_F_array(num_threads, Eigen::VectorXd::Zero(num_dofs_total));
 
     #pragma omp parallel
     {
+        int tid = omp_get_thread_num();
+        auto& thread_triplets = thread_triplets_array[tid];
+        auto& thread_F = thread_F_array[tid];
+
         // A. ALLOCATION UNIQUE PAR THREAD
         constexpr int max_nodes = 8;
         constexpr int dofs_per_elem = max_nodes;
         constexpr int max_triplets_per_elem = dofs_per_elem * dofs_per_elem;
         
-        std::vector<Eigen::Triplet<double>> thread_triplets;
         int elem_per_thread = (num_elements / num_threads) + 1;
         thread_triplets.reserve(elem_per_thread * max_triplets_per_elem);
 
-        Eigen::VectorXd thread_F = Eigen::VectorXd::Zero(num_dofs_total);
-        Eigen::VectorXd thread_diag = Eigen::VectorXd::Zero(num_dofs_total);
+        Eigen::VectorXd thread_diag = Eigen::VectorXd::Zero(num_dofs_total); // Inutilisé mais requis par la signature
         
         Eigen::MatrixXd K_local_buffer = Eigen::MatrixXd::Zero(dofs_per_elem, dofs_per_elem);
         Eigen::VectorXd F_local_buffer = Eigen::VectorXd::Zero(dofs_per_elem);
@@ -51,7 +55,7 @@ void FractureAssembler::assemble_system(
         std::vector<int> indices_buffer; 
         indices_buffer.reserve(max_nodes);
 
-        // B. BOUCLE SUR LES ÉLÉMENTS
+        // B. BOUCLE SUR LES ÉLÉMENTS (100% Parallèle, Zéro Verrou)
         #pragma omp for schedule(guided)
         for (int i = 0; i < num_elements; ++i) {
             const auto& elem = mesh.get_elements()[i];
@@ -74,16 +78,25 @@ void FractureAssembler::assemble_system(
                 thread_triplets, thread_F, thread_diag
             );
         }
+    } // Fin de la région parallèle : synchronisation implicite
 
-        // C. FUSION CRITIQUE
-        #pragma omp critical
-        {
-            global_triplets.insert(global_triplets.end(), thread_triplets.begin(), thread_triplets.end());
-            F_global += thread_F;
-        }
+    // C. FUSION SÉQUENTIELLE HORS PARALLÉLISME (Ultra-rapide)
+    size_t total_triplets = 0;
+    for (int t = 0; t < num_threads; ++t) {
+        total_triplets += thread_triplets_array[t].size();
     }
 
-    // Application de l'irréversibilité (souvent traitée post-assemblage dans les codes champ de phase)
+    std::vector<Eigen::Triplet<double>> global_triplets;
+    global_triplets.reserve(total_triplets); // Allocation globale unique exacte
+
+    for (int t = 0; t < num_threads; ++t) {
+        global_triplets.insert(global_triplets.end(), 
+                               thread_triplets_array[t].begin(), 
+                               thread_triplets_array[t].end());
+        F_global += thread_F_array[t];
+    }
+
+    // Application de l'irréversibilité (post-assemblage)
     double max_diag = 1e12;
     appliquer_irreversibilite(num_dofs_total, v_n, max_diag, global_triplets, F_global);
 
@@ -102,6 +115,7 @@ void FractureAssembler::calculer_matrices_elementaires(
     Eigen::Ref<Eigen::MatrixXd> K_local, Eigen::Ref<Eigen::VectorXd> F_local,
     Eigen::RowVectorXd& N_buffer, Eigen::MatrixXd& grad_N_buffer) 
 {
+    ZoneScoped;
     int n_nodes = elem.get_num_nodes();
     std::array<int, 8> indices;
     for (int i = 0; i < n_nodes; ++i) indices[i] = elem.get_node_index(i);

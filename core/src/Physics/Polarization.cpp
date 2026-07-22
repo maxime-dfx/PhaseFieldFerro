@@ -38,6 +38,7 @@ void Polarization::appliquer_conditions_initiales() {
 
 void Polarization::update_P(double time, double dt_relax,  const Fracture& fracture, const Mechanics& mechanics, const Electrostatics& electrostatics, const MaterialModel& material)
 {
+    ZoneScoped;
     (void)time; 
     double dt = dt_relax;
     const int n_nodes = static_cast<int>(Px_current.size());
@@ -52,16 +53,26 @@ void Polarization::update_P(double time, double dt_relax,  const Fracture& fract
         K_global, F_global
     );
 
-    Eigen::VectorXd P_guess(system_size);
-    #pragma omp parallel for schedule(static)
-    for (int i = 0; i < n_nodes; ++i) {
-        P_guess(2 * i)     = Px_current(i);
-        P_guess(2 * i + 1) = Py_current(i);
+    // 1. Analyse symbolique (exécutée une seule fois au tout premier appel)
+    if (!m_is_pattern_analyzed) {
+        m_cholmod_solver.analyzePattern(K_global);
+        if (m_cholmod_solver.info() != Eigen::Success) {
+            Logger::error("[Polarization] Echec de l'analyse symbolique CHOLMOD !");
+        }
+        m_is_pattern_analyzed = true;
     }
 
-    Eigen::VectorXd P_new = LinearSolver::solve_with_guess(K_global, F_global, P_guess, config.simulation.debug_enabled);
+    // 2. Factorisation numérique (rapide à chaque itération)
+    m_cholmod_solver.factorize(K_global);
+    if (m_cholmod_solver.info() != Eigen::Success) {
+        Logger::error("[Polarization] Echec de la factorisation CHOLMOD !");
+    }
 
-    if (P_new.allFinite()) {
+    // 3. Résolution directe via le cache
+    Eigen::VectorXd P_new = m_cholmod_solver.solve(F_global);
+
+    // 4. Vérification et mise à jour
+    if (m_cholmod_solver.info() == Eigen::Success && P_new.allFinite()) {
         map_global_vector_to_components(P_new);
     } else {
         Logger::error("[Polarization] Echec du solveur tangent monolithique : présence de NaN/Inf.");

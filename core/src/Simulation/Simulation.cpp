@@ -4,6 +4,7 @@
 #include "Utils/ProgressBar.h"
 #include <algorithm> 
 #include <stdexcept> 
+#include <tracy/Tracy.hpp>
 
 // =========================================================================
 // Constructeur : Orchestration et injection des dépendances
@@ -55,6 +56,7 @@ void Simulation::initialize_physics() {
 // RÉSOLUTION NON-LINÉAIRE (BOUCLE DE PICARD) - Algorithm 1 (Abdollahi & Arias)
 // =========================================================================
 int Simulation::compute_one_step_physics(double time, double dt) {
+    ZoneScoped;
     boundary_manager.update_time(time);
     
     // 1. Sauvegarde de l'état n (itération m=0) pour le calcul d'erreur intra-pas

@@ -5,6 +5,8 @@
 #include "IO/Datafile.h"
 #include "Mesh/Mesh.h"
 #include "BC/BoundaryManager.h"
+#include <Eigen/CholmodSupport>
+
 
 class Fracture;
 class Mechanics;
@@ -24,6 +26,9 @@ private:
 
     // --- Fonction d'initialisation isolée ---
     void appliquer_conditions_initiales();
+
+    Eigen::CholmodSimplicialLDLT<Eigen::SparseMatrix<double>> m_cholmod_solver;
+    bool m_is_pattern_analyzed = false;
 
 public:
     Polarization(const Datafile& config, const Mesh& mesh, const BoundaryManager& bc_manager);

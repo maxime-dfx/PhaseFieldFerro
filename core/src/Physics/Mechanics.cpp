@@ -41,6 +41,7 @@ void Mechanics::appliquer_conditions_initiales() {
 }
 
 void Mechanics::update_u(double time, const Polarization& polarization, const Fracture& fracture, const MaterialModel& material) {
+    ZoneScoped;
     (void)time;
     size_t n_nodes = mesh.get_num_nodes();
     size_t system_size = 2 * n_nodes;
@@ -50,16 +51,26 @@ void Mechanics::update_u(double time, const Polarization& polarization, const Fr
 
     MechanicsAssembler::assemble_system(mesh, polarization, fracture, material, bc_manager.get_ux_bcs(), bc_manager.get_uy_bcs(), K_global, F_global);
 
-    Eigen::VectorXd U_guess(system_size);
-    #pragma omp parallel for schedule(static)
-    for (size_t i = 0; i < n_nodes; ++i) {
-        U_guess(2 * i)     = ux_current(i);
-        U_guess(2 * i + 1) = uy_current(i);
+    // 1. Analyse symbolique (exécutée une seule fois au tout premier appel)
+    if (!m_is_pattern_analyzed) {
+        m_cholmod_solver.analyzePattern(K_global);
+        if (m_cholmod_solver.info() != Eigen::Success) {
+            Logger::error("[Mechanics] Echec de l'analyse symbolique CHOLMOD !");
+        }
+        m_is_pattern_analyzed = true;
     }
 
-    Eigen::VectorXd U_new = LinearSolver::solve_with_guess(K_global, F_global, U_guess, config.simulation.debug_enabled);
+    // 2. Factorisation numérique (rapide à chaque itération)
+    m_cholmod_solver.factorize(K_global);
+    if (m_cholmod_solver.info() != Eigen::Success) {
+        Logger::error("[Mechanics] Echec de la factorisation CHOLMOD !");
+    }
 
-    if (U_new.allFinite()) {
+    // 3. Résolution directe via le cache
+    Eigen::VectorXd U_new = m_cholmod_solver.solve(F_global);
+
+    // 4. Vérification et mise à jour
+    if (m_cholmod_solver.info() == Eigen::Success && U_new.allFinite()) {
         map_global_vector_to_components(U_new);
     } else {
         Logger::error("[Mechanics] Echec resolution ou solution non finie");

@@ -7,6 +7,8 @@
 #include "IO/Datafile.h"
 #include "Mesh/Mesh.h"
 #include "BC/BoundaryManager.h"
+#include <Eigen/CholmodSupport>
+
 
 class Polarization;
 class Fracture;
@@ -37,7 +39,9 @@ private:
         const Element& elem, 
         const GaussPoint2D& gp, 
         const std::array<std::array<double, 2>, 8>& coords) const;
-
+        
+    Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>> m_cholmod_solver;
+    bool m_is_pattern_analyzed = false;
 public:
     Mechanics(const Datafile& config, const Mesh& mesh, const BoundaryManager& bc_manager);
 

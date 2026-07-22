@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <array>
 
+
 Electrostatics::Electrostatics(const Datafile& config, const Mesh& mesh, const BoundaryManager& bc_manager) 
     : config(config), mesh(mesh), bc_manager(bc_manager) 
 {
@@ -36,6 +37,7 @@ void Electrostatics::appliquer_conditions_initiales() {
 }
 
 void Electrostatics::update_phi(double time, const Polarization& polarization, const Fracture& fracture, const MaterialModel& material) {
+    ZoneScoped;
     (void)time; 
     size_t n_nodes = mesh.get_num_nodes();
     Eigen::SparseMatrix<double> K_global(n_nodes, n_nodes);
@@ -43,9 +45,26 @@ void Electrostatics::update_phi(double time, const Polarization& polarization, c
 
     ElectrostaticsAssembler::assemble_system(mesh, polarization, fracture, material, config, bc_manager.get_phi_bcs(), K_global, F_global);
 
-    Eigen::VectorXd phi_new = LinearSolver::solve_with_guess(K_global, F_global, phi_current, config.simulation.debug_enabled);
+    // 1. Analyse symbolique (exécutée une seule fois au tout premier appel)
+    if (!m_is_pattern_analyzed) {
+        m_cholmod_solver.analyzePattern(K_global);
+        if (m_cholmod_solver.info() != Eigen::Success) {
+            Logger::error("[Electrostatics] Echec de l'analyse symbolique CHOLMOD !");
+        }
+        m_is_pattern_analyzed = true;
+    }
 
-    if (phi_new.allFinite()) {
+    // 2. Factorisation numérique (rapide à chaque itération)
+    m_cholmod_solver.factorize(K_global);
+    if (m_cholmod_solver.info() != Eigen::Success) {
+        Logger::error("[Electrostatics] Echec de la factorisation CHOLMOD !");
+    }
+
+    // 3. Résolution directe via le cache
+    Eigen::VectorXd phi_new = m_cholmod_solver.solve(F_global);
+
+    // 4. Vérification et mise à jour
+    if (m_cholmod_solver.info() == Eigen::Success && phi_new.allFinite()) {
         phi_current = phi_new;
         compute_electric_field();
     } else {

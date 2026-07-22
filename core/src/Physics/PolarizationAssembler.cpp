@@ -1,5 +1,6 @@
 #include "Physics/PolarizationAssembler.h"
 #include <iostream>
+#include <tracy/Tracy.hpp>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -17,27 +18,33 @@ void PolarizationAssembler::assemble_system(
         const BoundaryManager& bc_manager,
         Eigen::SparseMatrix<double>& K_global, Eigen::VectorXd& F_global) 
 {
+    ZoneScoped;
     int num_elements = mesh.get_num_elements();
     int num_nodes_total = mesh.get_num_nodes();
     int num_dofs_total = num_nodes_total * 2; // 2 DDLs par noeud (Px, Py)
 
-    // Initialisation globale
+    // Initialisation globale de F_global
     F_global = Eigen::VectorXd::Zero(num_dofs_total);
-    Eigen::VectorXd diag_global_px = Eigen::VectorXd::Zero(num_nodes_total);
-    Eigen::VectorXd diag_global_py = Eigen::VectorXd::Zero(num_nodes_total);
-    
-    std::vector<Eigen::Triplet<double>> global_triplets;
 
     int num_threads = 1;
 #ifdef _OPENMP
     num_threads = omp_get_max_threads();
 #endif
 
-    // Pré-allocation globale (Max Q8 -> 8 noeuds -> 16 DDL -> 256 triplets)
-    global_triplets.reserve(num_elements * 256); 
+    // Tableaux de stockage thread-locaux pour supprimer le #pragma omp critical
+    std::vector<std::vector<Eigen::Triplet<double>>> thread_triplets_array(num_threads);
+    std::vector<Eigen::VectorXd> thread_F_array(num_threads, Eigen::VectorXd::Zero(num_dofs_total));
+    std::vector<Eigen::VectorXd> thread_diag_px_array(num_threads, Eigen::VectorXd::Zero(num_nodes_total));
+    std::vector<Eigen::VectorXd> thread_diag_py_array(num_threads, Eigen::VectorXd::Zero(num_nodes_total));
 
     #pragma omp parallel
     {
+        int tid = omp_get_thread_num();
+        auto& thread_triplets = thread_triplets_array[tid];
+        auto& thread_F = thread_F_array[tid];
+        auto& thread_diag_px = thread_diag_px_array[tid];
+        auto& thread_diag_py = thread_diag_py_array[tid];
+
         // -------------------------------------------------------------
         // A. OPTIMISATION : ALLOCATION UNIQUE PAR THREAD (Zero Heap)
         // -------------------------------------------------------------
@@ -45,14 +52,9 @@ void PolarizationAssembler::assemble_system(
         constexpr int dofs_per_elem = max_nodes * 2;
         constexpr int max_triplets_per_elem = dofs_per_elem * dofs_per_elem;
         
-        std::vector<Eigen::Triplet<double>> thread_triplets;
         int elem_per_thread = (num_elements / num_threads) + 1;
         thread_triplets.reserve(elem_per_thread * max_triplets_per_elem);
 
-        Eigen::VectorXd thread_F = Eigen::VectorXd::Zero(num_dofs_total);
-        Eigen::VectorXd thread_diag_px = Eigen::VectorXd::Zero(num_nodes_total);
-        Eigen::VectorXd thread_diag_py = Eigen::VectorXd::Zero(num_nodes_total);
-        
         // Buffers locaux réutilisables (0 allocation dans la boucle)
         Eigen::MatrixXd K_local_buffer = Eigen::MatrixXd::Zero(dofs_per_elem, dofs_per_elem);
         Eigen::VectorXd F_local_buffer = Eigen::VectorXd::Zero(dofs_per_elem);
@@ -63,7 +65,7 @@ void PolarizationAssembler::assemble_system(
         indices_buffer.reserve(max_nodes);
 
         // -------------------------------------------------------------
-        // B. BOUCLE SUR LES ÉLÉMENTS
+        // B. BOUCLE SUR LES ÉLÉMENTS (100% Parallèle, Zéro Verrou)
         // -------------------------------------------------------------
         #pragma omp for schedule(guided)
         for (int i = 0; i < num_elements; ++i) {
@@ -89,24 +91,36 @@ void PolarizationAssembler::assemble_system(
                 K_local, F_local, N_buffer, grad_N_buffer
             );
 
-            // 2. Distribution (Scatter) + stockage des diagonales
+            // 2. Distribution (Scatter) + stockage des diagonales thread-locales
             distribuer_local_vers_global(
                 indices_buffer, n_nodes, K_local, F_local, 
                 thread_triplets, thread_F, thread_diag_px, thread_diag_py
             );
         }
+    } // Fin #pragma omp parallel (synchronisation implicite)
 
-        // -------------------------------------------------------------
-        // C. FUSION SÉCURISÉE DES DONNÉES THREAD-LOCALES
-        // -------------------------------------------------------------
-        #pragma omp critical
-        {
-            global_triplets.insert(global_triplets.end(), thread_triplets.begin(), thread_triplets.end());
-            F_global += thread_F;
-            diag_global_px += thread_diag_px;
-            diag_global_py += thread_diag_py;
-        }
-    } // Fin #pragma omp parallel
+    // -------------------------------------------------------------
+    // C. FUSION SÉQUENTIELLE HORS PARALLÉLISME (Ultra-rapide)
+    // -------------------------------------------------------------
+    size_t total_triplets = 0;
+    for (int t = 0; t < num_threads; ++t) {
+        total_triplets += thread_triplets_array[t].size();
+    }
+
+    std::vector<Eigen::Triplet<double>> global_triplets;
+    global_triplets.reserve(total_triplets);
+
+    Eigen::VectorXd diag_global_px = Eigen::VectorXd::Zero(num_nodes_total);
+    Eigen::VectorXd diag_global_py = Eigen::VectorXd::Zero(num_nodes_total);
+
+    for (int t = 0; t < num_threads; ++t) {
+        global_triplets.insert(global_triplets.end(), 
+                               thread_triplets_array[t].begin(), 
+                               thread_triplets_array[t].end());
+        F_global += thread_F_array[t];
+        diag_global_px += thread_diag_px_array[t];
+        diag_global_py += thread_diag_py_array[t];
+    }
 
     // Traitement des DDL flottants et Conditions aux Limites
     double max_diag = 1e12; 
@@ -133,6 +147,7 @@ void PolarizationAssembler::calculer_matrices_elementaires(
     Eigen::Ref<Eigen::MatrixXd> K_local, Eigen::Ref<Eigen::VectorXd> F_local,
     Eigen::RowVectorXd& N_buffer, Eigen::MatrixXd& grad_N_buffer) 
 {
+    ZoneScoped;
     int n_nodes_elem = elem.get_num_nodes();
     std::array<int, 8> indices;
     for (int i = 0; i < n_nodes_elem; ++i) indices[i] = elem.get_node_index(i);

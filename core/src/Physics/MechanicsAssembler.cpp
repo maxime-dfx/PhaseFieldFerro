@@ -1,5 +1,6 @@
 #include "Physics/MechanicsAssembler.h"
 #include <iostream>
+#include <tracy/Tracy.hpp>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -13,51 +14,48 @@ void MechanicsAssembler::assemble_system(
     const MaterialModel& material, const std::vector<NodeBC>& bcs_x, const std::vector<NodeBC>& bcs_y,
     Eigen::SparseMatrix<double>& K_global, Eigen::VectorXd& F_global) 
 {
+    ZoneScoped;
     int num_elements = mesh.get_num_elements();
     int num_dofs_total = mesh.get_num_nodes() * 2; // 2 DDLs par noeud (ux, uy)
 
     // Initialisation
     F_global = Eigen::VectorXd::Zero(num_dofs_total);
-    std::vector<Eigen::Triplet<double>> global_triplets;
 
     int num_threads = 1;
 #ifdef _OPENMP
     num_threads = omp_get_max_threads();
 #endif
 
-    // Pré-allocation globale approximative pour accélérer l'insertion finale
-    global_triplets.reserve(num_elements * 64); 
+    // Tableaux de stockage thread-locaux pour supprimer le #pragma omp critical
+    std::vector<std::vector<Eigen::Triplet<double>>> thread_triplets_array(num_threads);
+    std::vector<Eigen::VectorXd> thread_F_array(num_threads, Eigen::VectorXd::Zero(num_dofs_total));
 
     #pragma omp parallel
     {
-        // -------------------------------------------------------------
-        // A. OPTIMISATION : ALLOCATION UNIQUE PAR THREAD (Zero Heap)
-        // -------------------------------------------------------------
-        
+        int tid = omp_get_thread_num();
+        auto& thread_triplets = thread_triplets_array[tid];
+        auto& thread_F = thread_F_array[tid];
+
         // Calcul pour la réservation exacte des triplets (Max Q8 -> 8 noeuds -> 16 DDL -> 256 valeurs)
         constexpr int max_nodes = 8;
         constexpr int dofs_per_elem = max_nodes * 2;
-        constexpr int max_triplets_per_elem = dofs_per_elem * dofs_per_elem;
         
-        std::vector<Eigen::Triplet<double>> thread_triplets;
         int elem_per_thread = (num_elements / num_threads) + 1;
+        constexpr int max_triplets_per_elem = dofs_per_elem * dofs_per_elem;
         thread_triplets.reserve(elem_per_thread * max_triplets_per_elem);
 
-        Eigen::VectorXd thread_F = Eigen::VectorXd::Zero(num_dofs_total);
-        Eigen::VectorXd thread_diag = Eigen::VectorXd::Zero(num_dofs_total);
-        
         // Buffers locaux réutilisables (plus de création de vecteurs à la volée !)
         Eigen::MatrixXd K_local_buffer = Eigen::MatrixXd::Zero(dofs_per_elem, dofs_per_elem);
         Eigen::VectorXd F_local_buffer = Eigen::VectorXd::Zero(dofs_per_elem);
         Eigen::RowVectorXd N_buffer = Eigen::RowVectorXd::Zero(max_nodes);
         Eigen::MatrixXd grad_N_buffer = Eigen::MatrixXd::Zero(2, max_nodes);
 
-        // Buffer pour les indices afin de respecter l'ancienne signature (si besoin)
+        // Buffer pour les indices afin de respecter l'ancienne signature
         std::vector<int> indices_buffer; 
         indices_buffer.reserve(max_nodes);
 
         // -------------------------------------------------------------
-        // B. BOUCLE SUR LES ÉLÉMENTS
+        // B. BOUCLE SUR LES ÉLÉMENTS (100% Parallèle, Zéro Verrou)
         // -------------------------------------------------------------
         #pragma omp for schedule(guided)
         for (int i = 0; i < num_elements; ++i) {
@@ -65,7 +63,7 @@ void MechanicsAssembler::assemble_system(
             int n_nodes = elem.get_num_nodes();
             int n_dof = n_nodes * 2;
 
-            // Récupération des données
+            // Récupération des données géométriques
             auto coords = mesh.get_element_coords(i);
             
             // Remplissage rapide du buffer d'indices sans allocation
@@ -80,28 +78,52 @@ void MechanicsAssembler::assemble_system(
             // 1. Calcul des matrices élémentaires
             calculer_matrices_elementaires(
                 elem, coords, polarization, fracture, material, 
-                K_local, F_local, N_buffer, grad_N_buffer // <-- Si tu mets à jour la signature pour passer les buffers
+                K_local, F_local, N_buffer, grad_N_buffer
             );
 
-            // 2. Distribution (Scatter)
-            distribuer_local_vers_global(
-                indices_buffer, n_nodes, K_local, F_local, 
-                thread_triplets, thread_F, thread_diag
-            );
-        }
+            // 2. Distribution (Scatter) directe dans le vecteur local du thread (Zéro Conflit)
+            for (int n_i = 0; n_i < n_nodes; ++n_i) {
+                int idx_i = indices_buffer[n_i];
+                int global_dof_x_i = 2 * idx_i;
+                int global_dof_y_i = 2 * idx_i + 1;
 
-        // -------------------------------------------------------------
-        // C. FUSION SÉCURISÉE DES DONNÉES THREAD-LOCALES
-        // -------------------------------------------------------------
-        #pragma omp critical
-        {
-            global_triplets.insert(global_triplets.end(), thread_triplets.begin(), thread_triplets.end());
-            F_global += thread_F;
+                thread_F(global_dof_x_i) += F_local(2 * n_i);
+                thread_F(global_dof_y_i) += F_local(2 * n_i + 1);
+
+                for (int n_j = 0; n_j < n_nodes; ++n_j) {
+                    int idx_j = indices_buffer[n_j];
+                    int global_dof_x_j = 2 * idx_j;
+                    int global_dof_y_j = 2 * idx_j + 1;
+
+                    thread_triplets.emplace_back(global_dof_x_i, global_dof_x_j, K_local(2 * n_i, 2 * n_j));
+                    thread_triplets.emplace_back(global_dof_x_i, global_dof_y_j, K_local(2 * n_i, 2 * n_j + 1));
+                    thread_triplets.emplace_back(global_dof_y_i, global_dof_x_j, K_local(2 * n_i + 1, 2 * n_j));
+                    thread_triplets.emplace_back(global_dof_y_i, global_dof_y_j, K_local(2 * n_i + 1, 2 * n_j + 1));
+                }
+            }
         }
-    } // Fin #pragma omp parallel
+    } // Fin de la région parallèle : la barrière implicite garantit que tous les threads ont fini.
+
+    // =========================================================================
+    // C. FUSION SÉQUENTIELLE HORS PARALLÉLISME (Ultra-rapide)
+    // =========================================================================
+    size_t total_triplets = 0;
+    for (int t = 0; t < num_threads; ++t) {
+        total_triplets += thread_triplets_array[t].size();
+    }
+
+    std::vector<Eigen::Triplet<double>> global_triplets;
+    global_triplets.reserve(total_triplets); // Allocation globale unique exacte
+
+    for (int t = 0; t < num_threads; ++t) {
+        global_triplets.insert(global_triplets.end(), 
+                               thread_triplets_array[t].begin(), 
+                               thread_triplets_array[t].end());
+        F_global += thread_F_array[t];
+    }
 
     // Application des conditions aux limites
-    double max_diag = 1e12; // Ou tu peux chercher la vraie valeur max de la diagonale
+    double max_diag = 1e12; 
     appliquer_conditions_limites(bcs_x, bcs_y, max_diag, global_triplets, F_global);
 
     // Assemblage final du solveur
@@ -118,6 +140,7 @@ void MechanicsAssembler::calculer_matrices_elementaires(
     Eigen::Ref<Eigen::MatrixXd> K_local, Eigen::Ref<Eigen::VectorXd> F_local,
     Eigen::RowVectorXd& N_buffer, Eigen::MatrixXd& grad_N_buffer) 
 {
+    ZoneScoped;
     int n_nodes_elem = elem.get_num_nodes();
     std::array<int, 8> indices;
     for (int i = 0; i < n_nodes_elem; ++i) indices[i] = elem.get_node_index(i);
@@ -156,7 +179,7 @@ void MechanicsAssembler::calculer_matrices_elementaires(
 
         // Contrainte spontanee (couplage electrostrictif), egalement degradee
         Eigen::Vector3d sigma_0 = material.compute_sigma_0(P_gp);
-        F_local.head(n_dof).noalias() += B.transpose() * sigma_0 * (dV * degradation_factor);
+        F_local.head(n_dof).noalias() -= B.transpose() * sigma_0 * (dV * degradation_factor);
     };
 
     ElementIntegrator::integrate(elem, coords, N_buffer, grad_N_buffer, compute_physics);

@@ -6,6 +6,7 @@
 #include "IO/Datafile.h"
 #include "Mesh/Mesh.h"
 #include "BC/BoundaryManager.h"
+#include <Eigen/CholmodSupport>
 
 class Polarization;
 class Fracture;
@@ -33,6 +34,8 @@ private:
     double calculer_champ_triangle(const Element& elem, const Eigen::VectorXd& champ_nodal) const;
     double calculer_champ_quadrangle(const Element& elem, const GaussPoint2D& gp, const Eigen::VectorXd& champ_nodal) const;
 
+    Eigen::CholmodSimplicialLDLT<Eigen::SparseMatrix<double>> m_cholmod_solver;
+    bool m_is_pattern_analyzed = false;
 public:
     Electrostatics(const Datafile& config, const Mesh& mesh, const BoundaryManager& bc_manager);
 

@@ -186,14 +186,13 @@ int main(int argc, char* argv[]) {
         Logger::info("Configuration loaded from: " + config_file);
 
         Mesh mesh = [&]() {
-            if (config.mesh.calcul_mesh) {
-                Logger::info("Mesh generated successfully.");
-                return MeshGenerator::generate_structured_mesh(config.mesh);
-            } else {
-                Logger::info("Mesh loaded from file: " + config.mesh.get_mesh_file);
-                return MeshGeneratorGmsh::load_from_msh(config.mesh.get_mesh_file, config.mesh.Lx, config.mesh.Ly);
-            }
-        }(); 
+            Mesh m = config.mesh.calcul_mesh ? 
+                    MeshGenerator::generate_structured_mesh(config.mesh) : 
+                    MeshGeneratorGmsh::load_from_msh(config.mesh.get_mesh_file, config.mesh.Lx, config.mesh.Ly);
+                    
+            m.apply_rcm();
+            return m;
+        }();
 
         ResultsExporter exporter(mesh);
         

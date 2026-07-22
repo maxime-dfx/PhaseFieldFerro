@@ -4,6 +4,8 @@
 #include <Eigen/Core>
 #include "IO/Datafile.h"
 #include "Mesh/Mesh.h"
+#include <Eigen/CholmodSupport>
+
 
 class Polarization;
 class Mechanics;
@@ -23,6 +25,9 @@ private:
     // --- Fonction d'initialisation isolée ---
     void appliquer_conditions_initiales();
     double calculer_distance_signee_precrack(double x, double y, const PrecrackConfig& pc) const;
+
+    Eigen::CholmodSimplicialLDLT<Eigen::SparseMatrix<double>> m_cholmod_solver;
+    bool m_is_pattern_analyzed = false;
 
 public:
     Fracture(const Datafile& config, const Mesh& mesh);
