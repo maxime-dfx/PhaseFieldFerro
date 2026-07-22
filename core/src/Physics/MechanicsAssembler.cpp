@@ -156,7 +156,7 @@ void MechanicsAssembler::calculer_matrices_elementaires(
 
         // Contrainte spontanee (couplage electrostrictif), egalement degradee
         Eigen::Vector3d sigma_0 = material.compute_sigma_0(P_gp);
-        F_local.head(n_dof).noalias() -= B.transpose() * sigma_0 * (dV * degradation_factor);
+        F_local.head(n_dof).noalias() += B.transpose() * sigma_0 * (dV * degradation_factor);
     };
 
     ElementIntegrator::integrate(elem, coords, N_buffer, grad_N_buffer, compute_physics);
