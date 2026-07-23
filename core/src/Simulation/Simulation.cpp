@@ -69,7 +69,8 @@ int Simulation::compute_one_step_physics(double time, double dt) {
     int m = 0;
     double err_p = 1.0, err_v = 1.0;
     const double tol_ferro = config.simulation.tol_ferro;  
-    const double tol_vfield = config.simulation.tol_vfield; 
+    const double tol_vfield = config.simulation.tol_vfield;
+    const int MIN_ITER = config.simulation.min_iter; 
     const int MAX_ITER = config.simulation.max_iter; 
     
     // Temps de relaxation pseudo-temporel (section 3.1 du papier, eq 15 et 16)
@@ -114,7 +115,7 @@ int Simulation::compute_one_step_physics(double time, double dt) {
         Logger::debug("[Convergence] t=" + std::to_string(time) + " m=" + std::to_string(m) + 
                       " err_p=" + std::to_string(err_p) + " err_v=" + std::to_string(err_v), config.simulation.debug_enabled);
                       
-    } while ((err_p > tol_ferro || err_v > tol_vfield) && m < MAX_ITER);
+    } while ((err_p > tol_ferro || err_v > tol_vfield || m < MIN_ITER) && m < MAX_ITER);
 
     if (m >= MAX_ITER) {
         Logger::debug("Non-convergence au temps " + std::to_string(time), config.simulation.debug_enabled);

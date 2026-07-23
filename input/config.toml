@@ -24,7 +24,7 @@ enable_electrostatics = true
 enable_fracture = true
 
 [simulation]
-total_time = 60.0
+total_time = 3.0
 dt = 0.03
 dt_relax = 0.1
 save_frequency = 1            

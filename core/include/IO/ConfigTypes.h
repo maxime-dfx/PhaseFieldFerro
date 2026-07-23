@@ -22,6 +22,7 @@ struct SimulationConfig {
     int save_frequency;
     double tol_ferro;
     double tol_vfield;
+    int min_iter;
     int max_iter;
     bool debug_enabled;
 };
