@@ -1,13 +1,13 @@
 # ==============================================================================
-# Fichier de Configuration TOML pour PhaseFieldFerro - MODE DEBUG / DIAGNOSTIC
+# Fichier de Configuration TOML pour PhaseFieldFerro - ALL FEATURES INCLUDED
 # ==============================================================================
+
 [output]
 OutputDir = "../output"
 MeshCreateFile = "maillage/maillage_gmsh"
 
 [debug]
-enabled = true    # <-- ACTIVE pour voir les logs de convergence (m, err_p, err_v)
-                  #     et les messages "Non-convergence au temps ..."
+enabled = false
 
 [chrono]
 chrono_mesh = true
@@ -24,42 +24,166 @@ enable_electrostatics = true
 enable_fracture = true
 
 [simulation]
-total_time = 1000.0
+total_time = 3.0
 dt = 0.03
 dt_relax = 0.1
 save_frequency = 1            
 tolerance_ferro = 1e-3
 tolerance_vfield = 1e-3
+min_iter = 0
+max_iter = 10000
+omega_polarization = 1.0
 
 [mesh]
-calcul_mesh = false
-get_mesh_file = "../input/rectangle.msh"
+calcul_mesh = true
+get_mesh_file = "../input/square.msh"
+n_x = 200
+n_y = 200
 L_x = 200.0
 L_y = 200.0
 element_type = "TRIANGLE"
 
+[crystal]
+num_grains = 120
+seed = 42
+use_random_seed = false
+grain_boundary_material_id = 1
+grain_boundary_band_rings = 2
+polarization_lock_band_rings = 1
+
+# ==============================================================================
+# CONFIGURATION DES MODULES PHYSIQUES ET DE LEURS SOLVEURS (NOUVEAU)
+# ==============================================================================
+
 [polarization]
-initial_polarization = "UNIFORM"
+initial_polarization = "UNIFORM" 
 Px_0 = 1.0
 Py_0 = 0.0
+norm_P0 = 1.0
+# --- Solveur ---
+solver_type = "PETSC"            
+preconditioner_type = "ILUT"  
+solver_tol = 1e-6               
+solver_max_iter = 2000   
 
 [mechanics]
 initial_mechanics = "UNIFORM"
 ux_0 = 0.0
 uy_0 = 0.0
+# --- Solveur ---
+solver_type = "DIRECT"
+preconditioner_type = "DIAGONAL"
+solver_tol = 1e-10               
+solver_max_iter = 2000           
 
 [electrostatics]
 initial_electrostatics = "UNIFORM"
 Ex_0 = 0.0
 Ey_0 = 0.0
+# --- Solveur ---
+solver_type = "CG"               
+preconditioner_type = "DIAGONAL" 
+solver_tol = 1e-6                
+solver_max_iter = 2000          
 
 [fracture]
 mode = "PERMEABLE"
+enable_precrack = false
+alpha_irreversibility = 0.02
+
+# --- Solveur ---
+solver_type = "CG"            
+preconditioner_type = "DIAGONAL"  
+solver_tol = 1e-6                 
+solver_max_iter = 2000            
+
+# ---- CONFIGURATION DE LA PRÉ-FISSURE (NOUVEAU) ----
+[fracture.precrack]
+shape = "segment"                
+x0 = 0.0                         
+y0 = 250.0                       
+length = 0.0                    
+half_width = 0.0                 
+xmin = 0.0                       
+xmax = 50.0                      
+ymin = 248.0                     
+ymax = 252.0                     
+smooth = true                    
+smoothing_length = 2.0           
+growth_enable = false            
+growth_length_start = 50.0       
+growth_length_end = 150.0        
+growth_t_end = 3.0               
+
 
 # ==============================================================================
-# PARAMÈTRES MATÉRIAU - identiques a la Table 1 du papier (Abdollahi & Arias, 2011)
+# PARAMÈTRES MATÉRIAU
 # ==============================================================================
-[material]
+
+# id = 0 : volume ferroélectrique - Table 1, Abdollahi & Arias (2011)
+[[materials]]
+id = 0
+type = "Ferroelectric"
+is_ferroelectric = true
+a0    = 0.1
+b1    = 1.4282
+b2    = -0.185
+b3    = 0.8066
+c1    = 185.0
+c2    = 111.0
+c3    = 74.0
+eps0  = 0.131
+t     = 3.0
+P0    = 1.0
+mu_p  = 1.0
+mu_v  = 15.0
+xi    = 1.0
+c0    = 1.0
+alpha_1    = -0.0023
+alpha_11   = -0.0029
+alpha_111  = 0.003
+alpha_1111 = 0.001
+alpha_12   = -0.0011
+alpha_112  = -0.00068
+alpha_1112 = 0.0093
+alpha_1122 = 1.24
+eta_k = 1e-6
+Gc    = 4.0
+kappa = 2.0
+
+# id = 1 : joint de grain (non-ferroélectrique) 
+[[materials]]
+id = 1
+type = "GrainBoundary"
+is_ferroelectric = true  
+
+# --- 1. Propriétés mécaniques (Souple, inchangées) ---
+c1 = 8.0
+c2 = 3.0
+c3 = 3.0
+
+# --- 2. Fracture et permittivité (Inchangées) ---
+Gc    = 0.1
+kappa = 2.0
+mu_v  = 15.0
+eps0  = 0.03
+eta_k = 1e-6
+
+# --- 3. Couplage électrostrictif (LE SECRET DE LA STABILITÉ) ---
+# Divisés par ~4.8 par rapport au volume pour compenser la chute de c1
+b1 = 0.3      # (Ancien: 1.4282)
+b2 = -0.038   # (Ancien: -0.185)
+b3 = 0.168    # (Ancien: 0.8066)
+
+# --- 4. Gradient et cinétique (Ferroélectrique désordonné) ---
+a0   = 0.05   # Énergie de gradient plus faible dans le joint (Ancien: 0.1)
+mu_p = 2.0    # Mobilité légèrement accrue
+
+# --- 5. Paramètres de base et puits de Landau (Inchangés) ---
+t          = 3.0
+P0         = 1.0
+xi         = 1.0
+c0         = 1.0
 alpha_1    = -0.0023
 alpha_11   = -0.0029
 alpha_12   = -0.0011
@@ -68,26 +192,13 @@ alpha_112  = -0.00068
 alpha_1111 = 0.001
 alpha_1112 = 0.0093
 alpha_1122 = 1.24
-b1 = 1.4282
-b2 = -0.185
-b3 = 0.8066
-c1 = 185.0
-c2 = 111.0
-c3 = 74.0
-eps0 = 0.131
-t    = 300.0
-P0   = 1.0
-c0   = 1.0
-xi   = 1.0
-a0    = 0.1
-Gc    = 4.0
-kappa = 2.0
-mu_p  = 1.0
-mu_v  = 15 
-eta_k = 1e-6
 
 # ==============================================================================
-# CONDITIONS AUX LIMITES
+# CONDITIONS AUX LIMITES (BC)
+#
+# Formes disponibles (shape)   : "edge", "rect", "point", "circle"
+# Profils disponibles (profile): "constant", "time_ramp", "time_sine", 
+#                                "spatial_tanh", "spatial_parabola", "traveling_wave"
 # ==============================================================================
 
 [[boundary_rule]]
@@ -113,7 +224,7 @@ field = "uy"
 shape = "rect"
 xmin = 0.0
 xmax = 0.0
-ymin = 100.0
+ymin = 100.0  
 ymax = 200.0
 bc_type = "DIRICHLET"
 profile = "time_ramp"
@@ -128,7 +239,7 @@ shape = "rect"
 xmin = 0.0
 xmax = 0.0
 ymin = 0.0
-ymax = 100.0
+ymax = 100.0  
 bc_type = "DIRICHLET"
 profile = "time_ramp"
 val_start = 0.0
@@ -143,7 +254,7 @@ edge_name = "top"
 bc_type = "DIRICHLET"
 profile = "time_ramp"
 val_start = 0.0
-val_end = 3.0           # Comme dans l'article
+val_end = 3.0           
 t_end = 3.0
 
 # ---- DÉPLACEMENT VERTICAL - FACE BOTTOM ----
@@ -154,7 +265,7 @@ edge_name = "bottom"
 bc_type = "DIRICHLET"
 profile = "time_ramp"
 val_start = 0.0
-val_end = -3.0          # SYMÉTRIQUE !
+val_end = -3.0          
 t_end = 3.0
 
 # ---- DÉPLACEMENT HORIZONTAL - BLOCAGE EN UN POINT ----
@@ -162,7 +273,7 @@ t_end = 3.0
 field = "ux"
 shape = "point"
 px = 0.0
-py = 0.0
+py = 100.0        
 bc_type = "DIRICHLET"
 profile = "constant"
 val = 0.0

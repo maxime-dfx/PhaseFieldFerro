@@ -1,0 +1,197 @@
+# ==============================================================================
+# Configuration TOML pour PhaseFieldFerro - Piézocomposite sous Traction
+# ==============================================================================
+
+[output]
+OutputDir = "../output"
+MeshCreateFile = "composite_run"
+
+[debug]
+enabled = false
+
+[chrono]
+chrono_mesh = true
+chrono_Polarization = true
+chrono_Mechanics = true
+chrono_Electrostatics = true
+chrono_Fracture = true
+chrono_run = true
+
+[physics]
+enable_polarization = true
+enable_mecanics = true
+enable_electrostatics = true
+enable_fracture = true
+
+[simulation]
+total_time = 3.0
+dt = 0.03
+dt_relax = 0.1
+save_frequency = 1            
+tolerance_ferro = 1e-3
+tolerance_vfield = 1e-3
+min_iter = 0
+max_iter = 10000
+omega_polarization = 1.0
+
+[mesh]
+calcul_mesh = false
+get_mesh_file = "../input/composite.msh"  # <-- Mis à jour vers le bon maillage !
+n_x = 200
+n_y = 200
+L_x = 200.0
+L_y = 200.0
+element_type = "TRIANGLE"
+
+[crystal]
+num_grains = 1
+seed = 42
+use_random_seed = false
+
+# ==============================================================================
+# SOLVEURS (Optimisés pour 2D rapide)
+# ==============================================================================
+
+[polarization]
+initial_polarization = "UNIFORM" 
+Px_0 = 1.0
+Py_0 = 0.0
+norm_P0 = 1.0
+solver_type = "CG"               
+preconditioner_type = "DIAGONAL" 
+solver_tol = 1e-6              
+solver_max_iter = 2000    
+
+[mechanics]
+initial_mechanics = "UNIFORM"
+ux_0 = 0.0
+uy_0 = 0.0
+solver_type = "CG"           
+preconditioner_type = "DIAGONAL"
+solver_tol = 1e-10               
+solver_max_iter = 2000           
+
+[electrostatics]
+initial_electrostatics = "UNIFORM"
+Ex_0 = 0.0
+Ey_0 = 0.0
+solver_type = "CG"               
+preconditioner_type = "DIAGONAL" 
+solver_tol = 1e-6                
+solver_max_iter = 2000          
+
+[fracture]
+mode = "PERMEABLE"
+enable_precrack = true            # <-- Activé !
+alpha_irreversibility = 0.02
+solver_type = "CG"               
+preconditioner_type = "DIAGONAL" 
+solver_tol = 1e-6                
+solver_max_iter = 2000            
+
+[fracture.precrack]
+shape = "segment"                
+x0 = 0.0                         
+y0 = 100.0                        # Au milieu du bord gauche
+length = 20.0                     # Fissure initiale de longueur 20
+half_width = 1.0                 
+smooth = true                    
+smoothing_length = 2.0           
+growth_enable = false            
+
+# ==============================================================================
+# PARAMÈTRES MATÉRIAUX 
+# ==============================================================================
+[material]
+# (Base de coefficients - PZT / BaTiO3)
+alpha_1    = -0.0023
+alpha_11   = -0.0029
+alpha_12   = -0.0011
+alpha_111  = 0.003
+alpha_112  = -0.00068
+alpha_1111 = 0.001
+alpha_1112 = 0.0093
+alpha_1122 = 1.24
+b1 = 1.4282
+b2 = -0.185
+b3 = 0.8066
+c1 = 185.0
+c2 = 111.0
+c3 = 74.0
+eps0 = 0.131
+t    = 3.0
+P0   = 1.0
+c0   = 1.0
+xi   = 1.0
+a0    = 0.1
+Gc    = 4.0
+kappa = 2.0
+mu_p  = 1.0
+mu_v  = 15.0
+eta_k = 1e-6
+ 
+[[materials]]
+id = 1
+is_ferroelectric = false       
+eps0  = 0.03    
+c1    = 8.0     
+c2    = 3.0
+c3    = 3.0
+Gc    = 0.05       
+kappa = 2.0
+mu_v  = 15.0
+ 
+[[materials]]
+id = 2
+is_ferroelectric = true        # Fibres actives (hérite des coeffs [material])
+
+# ==============================================================================
+# CONDITIONS AUX LIMITES (BC)
+# ==============================================================================
+
+# 1. Potentiel électrique nul sur les bords
+[[boundary_rule]]
+field     = "phi"
+shape     = "edge"
+edge_name = "left"
+bc_type   = "DIRICHLET"
+profile   = "constant"
+val       = 0.0
+
+[[boundary_rule]]
+field     = "phi"
+shape     = "edge"
+edge_name = "right"
+bc_type   = "DIRICHLET"
+profile   = "constant"
+val       = 0.0
+
+# 2. Test de traction : on tire en haut et en bas
+[[boundary_rule]]
+field = "uy"
+shape = "edge"
+edge_name = "top"
+bc_type = "DIRICHLET"
+profile = "time_ramp"
+val_start = 0.0
+val_end = 3.0           
+t_end = 3.0
+
+[[boundary_rule]]
+field = "uy"
+shape = "edge"
+edge_name = "bottom"
+bc_type = "DIRICHLET"
+profile = "time_ramp"
+val_start = 0.0
+val_end = -3.0          
+t_end = 3.0
+
+# 3. Blocage des mouvements de corps rigides en X (sur un bord)
+[[boundary_rule]]
+field = "ux"
+shape = "edge"
+edge_name = "bottom"
+bc_type = "DIRICHLET"
+profile = "constant"
+val = 0.0
