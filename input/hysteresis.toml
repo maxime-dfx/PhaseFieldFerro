@@ -1,0 +1,151 @@
+# ==============================================================================
+# Fichier de Configuration TOML - TEST HYSTERESIS 1 ELEMENT (SATURATION)
+# ==============================================================================
+
+[output]
+OutputDir = "../output"
+MeshCreateFile = "maillage/maillage_gmsh"
+
+[debug]
+enabled = false
+
+[chrono]
+chrono_mesh = true
+chrono_Polarization = true
+chrono_Mechanics = true
+chrono_Electrostatics = true
+chrono_run = true
+
+[physics]
+enable_polarization = true
+enable_mecanics = true
+enable_electrostatics = true
+enable_fracture = false       # Toujours désactivé pour l'hystérésis pure
+
+[simulation]
+total_time = 9.0              # <-- MODIFIÉ : 3 cycles de 3 secondes
+dt = 0.03
+dt_relax = 0.05               
+save_frequency = 1            
+tolerance_ferro = 1e-4
+min_iter = 2
+max_iter = 100                
+omega_polarization = 1.0
+
+[mesh]
+calcul_mesh = true
+n_x = 1                       # 1 seul élément
+n_y = 1
+L_x = 1.0
+L_y = 1.0
+element_type = "QUAD4"        
+
+[crystal]
+num_grains = 1                # Monocristal
+seed = 42
+use_random_seed = false
+grain_boundary_material_id = -1 
+
+# ==============================================================================
+# SOLVEURS
+# ==============================================================================
+
+[polarization]
+initial_polarization = "UNIFORM" 
+Px_0 = 0.0
+Py_0 = 1.0
+norm_P0 = 1.0
+solver_type = "DIRECT"        
+preconditioner_type = "DIAGONAL"  
+solver_tol = 1e-6               
+solver_max_iter = 1000   
+
+[mechanics]
+initial_mechanics = "UNIFORM"
+ux_0 = 0.0
+uy_0 = 0.0
+solver_type = "DIRECT"
+preconditioner_type = "DIAGONAL"
+solver_tol = 1e-10               
+solver_max_iter = 1000           
+
+[electrostatics]
+initial_electrostatics = "UNIFORM"
+Ex_0 = 0.0
+Ey_0 = 0.0
+solver_type = "DIRECT"               
+preconditioner_type = "DIAGONAL" 
+solver_tol = 1e-6                
+solver_max_iter = 1000          
+
+# ==============================================================================
+# PARAMÈTRES MATÉRIAU (Abdollahi & Arias 2011)
+# ==============================================================================
+
+[[materials]]
+id = 0
+type = "Ferroelectric"
+is_ferroelectric = true
+a0    = 0.1
+b1    = 1.4282
+b2    = -0.185
+b3    = 0.8066
+c1    = 185.0
+c2    = 111.0
+c3    = 74.0
+eps0  = 0.131
+t     = 3.0
+P0    = 1.0
+mu_p  = 1.0
+mu_v  = 15.0
+xi    = 1.0
+c0    = 1.0
+alpha_1    = -0.0023
+alpha_11   = -0.0029
+alpha_111  = 0.003
+alpha_1111 = 0.001
+alpha_12   = -0.0011
+alpha_112  = -0.00068
+alpha_1112 = 0.0093
+alpha_1122 = 1.24
+eta_k = 1e-6
+
+# ==============================================================================
+# CONDITIONS AUX LIMITES (BC)
+# ==============================================================================
+
+# 1. ÉLECTROSTATIQUE : Champ sinusoïdal
+[[boundary_rule]]
+field     = "phi"
+shape     = "edge"
+edge_name = "bottom"
+bc_type   = "DIRICHLET"
+profile   = "constant"
+val       = 0.0
+
+[[boundary_rule]]
+field     = "phi"
+shape     = "edge"
+edge_name = "top"
+bc_type   = "DIRICHLET"
+profile   = "time_sine"
+offset    = 0.0
+amplitude = 0.03          # <-- MODIFIÉ : 3x plus fort pour écraser le champ coercitif
+frequency = 0.333333      # 1 cycle sur 3 secondes
+
+# 2. MÉCANIQUE : Blocage corps rigide strict
+[[boundary_rule]]
+field     = "uy"
+shape     = "edge"
+edge_name = "bottom"
+bc_type   = "DIRICHLET"
+profile   = "constant"
+val       = 0.0
+
+[[boundary_rule]]
+field     = "ux"
+shape     = "edge"
+edge_name = "left"
+bc_type   = "DIRICHLET"
+profile   = "constant"
+val       = 0.0
